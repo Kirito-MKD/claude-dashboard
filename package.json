@@ -1,0 +1,23 @@
+{
+  "name": "agent-dashboard",
+  "version": "1.0.0",
+  "description": "Локальный дашборд для отслеживания работы Claude Code агентов по проектам",
+  "private": true,
+  "main": "server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "setup": "node scripts/install.js",
+    "uninstall-hooks": "node scripts/install.js --uninstall",
+    "autostart": "node scripts/autostart.js",
+    "autostart:remove": "node scripts/autostart.js --remove",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.11.1",
+    "express": "^5.2.1",
+    "multer": "^2.0.2"
+  }
+}

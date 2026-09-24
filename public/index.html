@@ -1,0 +1,921 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Dashboard</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23d97757'/%3E%3Cpath d='M9 22V10h3l4 7 4-7h3v12h-3v-7l-4 7-4-7v7z' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0e1014;
+    --panel: #15181e;
+    --panel-2: #1b1f27;
+    --panel-3: #222733;
+    --border: #272c37;
+    --border-strong: #353b49;
+    --text: #e6e8ee;
+    --text-2: #b7bdcb;
+    --muted: #7f879a;
+    --accent: #d97757;
+    --accent-soft: rgba(217, 119, 87, .14);
+    --blue: #7aa2f7;
+    --blue-soft: rgba(122, 162, 247, .13);
+    --ok: #4cc38a;
+    --ok-soft: rgba(76, 195, 138, .13);
+    --danger: #ef6461;
+    --radius: 10px;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    display: grid; grid-template-rows: auto 1fr; overflow: hidden;
+  }
+  button, input, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #2a303c; border-radius: 10px; border: 2px solid var(--bg); }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  /* ---------- header ---------- */
+  header {
+    display: flex; align-items: center; gap: 12px; padding: 10px 18px;
+    border-bottom: 1px solid var(--border); background: var(--panel);
+  }
+  .logo { width: 24px; height: 24px; border-radius: 7px; background: var(--accent); display: grid; place-items: center; font-weight: 700; font-size: 13px; color: #fff; }
+  header h1 { font-size: 15px; font-weight: 600; margin: 0; letter-spacing: .2px; }
+  .live { margin-left: auto; display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; }
+  .live i { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
+  .live.on i { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
+
+  /* ---------- layout ---------- */
+  .layout { display: grid; grid-template-columns: 260px minmax(0, 1fr) 400px; min-height: 0; }
+  aside, #feed, #notes { min-height: 0; overflow-y: auto; }
+  .main-col { display: contents; }
+  aside { border-right: 1px solid var(--border); background: var(--panel); padding: 12px 10px; }
+  #notes { border-left: 1px solid var(--border); background: var(--panel); padding: 16px; }
+  #feed { padding: 16px 22px 40px; }
+
+  .section-title { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 4px 8px 8px; font-weight: 600; }
+
+  /* ---------- projects ---------- */
+  .proj {
+    display: block; width: 100%; text-align: left; background: none; border: 1px solid transparent;
+    border-radius: 8px; padding: 8px 10px; margin-bottom: 2px;
+  }
+  .proj:hover { background: var(--panel-2); }
+  .proj.active { background: var(--panel-3); border-color: var(--border-strong); }
+  .proj-row { display: flex; align-items: center; gap: 8px; }
+  .proj-name { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .proj-status { color: var(--text-2); font-size: 12px; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .proj-meta { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+  .pill { font-size: 11px; font-weight: 600; border-radius: 99px; padding: 1px 7px; background: var(--panel-3); color: var(--muted); white-space: nowrap; }
+  .pill.notes { background: var(--accent-soft); color: var(--accent); }
+  .empty-side { color: var(--muted); font-size: 12.5px; padding: 8px 10px; }
+
+  /* ---------- feed ---------- */
+  .feed-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+  .feed-head h2 { margin: 0; font-size: 18px; font-weight: 600; }
+  .feed-head .sub { color: var(--muted); font-size: 12.5px; }
+  .project-status {
+    background: var(--blue-soft); border: 1px solid rgba(122, 162, 247, .25); color: #c9d7fb;
+    border-radius: var(--radius); padding: 8px 12px; margin-bottom: 14px; font-size: 13px; white-space: pre-wrap;
+  }
+  .project-status b { color: var(--blue); font-weight: 600; margin-right: 6px; }
+  .day { font-size: 12px; color: var(--muted); font-weight: 600; margin: 18px 2px 8px; text-transform: uppercase; letter-spacing: .06em; }
+  .task {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px 14px; margin-bottom: 10px; position: relative;
+  }
+  .task:hover { border-color: var(--border-strong); }
+  .task-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .chip { background: var(--panel-3); color: var(--text-2); border-radius: 6px; padding: 1px 7px; font-weight: 600; }
+  .chip.link { cursor: pointer; }
+  .chip.link:hover { color: var(--text); }
+  .badge { border-radius: 6px; padding: 1px 7px; font-weight: 600; font-size: 11px; }
+  .badge.agent { background: var(--accent-soft); color: var(--accent); }
+  .badge.hook { background: var(--blue-soft); color: var(--blue); }
+  .sid { font-family: var(--mono); font-size: 11px; cursor: pointer; }
+  .sid:hover { color: var(--text-2); }
+  .icon-btn {
+    margin-left: auto; background: none; border: none; color: var(--muted); border-radius: 6px;
+    width: 24px; height: 24px; display: grid; place-items: center; opacity: 0; font-size: 16px; line-height: 1;
+  }
+  .task:hover .icon-btn, .note:hover .icon-btn, .icon-btn:focus-visible { opacity: 1; }
+  .icon-btn:hover { background: var(--panel-3); color: var(--danger); }
+  .field { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 10px; margin-top: 4px; }
+  .field .label { color: var(--muted); font-size: 12px; padding-top: 1px; }
+  .field .text { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .field.req .text { color: var(--text-2); }
+  .clamp { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+  .clamp.can-expand { cursor: pointer; }
+  .clamp.expanded { display: block; }
+  .more { color: var(--blue); font-size: 12px; cursor: pointer; margin-top: 2px; display: inline-block; }
+  .status-line { margin-top: 8px; font-size: 12.5px; color: #c9d7fb; }
+  .status-line b { color: var(--blue); font-weight: 600; }
+  details.files { margin-top: 8px; }
+  details.files summary { cursor: pointer; color: var(--muted); font-size: 12.5px; user-select: none; list-style: none; display: inline-flex; gap: 6px; align-items: center; }
+  details.files summary::-webkit-details-marker { display: none; }
+  details.files summary::before { content: "▸"; transition: transform .15s; display: inline-block; }
+  details.files[open] summary::before { transform: rotate(90deg); }
+  details.files summary:hover { color: var(--text-2); }
+  details.files ul { margin: 6px 0 0; padding: 8px 10px; list-style: none; background: var(--bg); border-radius: 8px; border: 1px solid var(--border); }
+  details.files li { font-family: var(--mono); font-size: 12px; color: var(--text-2); padding: 1px 0; overflow-wrap: anywhere; }
+  details.files li .dir { color: var(--muted); }
+  .empty { color: var(--muted); text-align: center; padding: 60px 20px; border: 1px dashed var(--border); border-radius: var(--radius); }
+  .empty code { font-family: var(--mono); font-size: 12px; background: var(--panel-2); padding: 2px 6px; border-radius: 5px; color: var(--text-2); }
+  .load-more { display: block; margin: 14px auto 0; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 7px 16px; color: var(--text-2); }
+  .load-more:hover { border-color: var(--border-strong); color: var(--text); }
+
+  /* ---------- notes ---------- */
+  #notes h2 { font-size: 16px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+  #notes h2 .pill { font-size: 11px; }
+  .composer { background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; margin-bottom: 16px; }
+  .composer:focus-within { border-color: var(--border-strong); }
+  .composer input[type=text], .composer textarea {
+    width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; outline: none;
+  }
+  .composer input[type=text]:focus, .composer textarea:focus { border-color: #4a5264; }
+  .composer textarea { resize: vertical; min-height: 84px; margin-top: 8px; display: block; }
+  .interim { color: var(--muted); font-style: italic; font-size: 12.5px; min-height: 0; margin-top: 4px; }
+  .interim:empty { display: none; }
+  .attachments { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .attachments:empty { display: none; }
+  .thumb { position: relative; width: 72px; height: 72px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); background: var(--bg); }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; cursor: zoom-in; }
+  .thumb .x, .audio-att .x {
+    position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; border-radius: 50%; border: none;
+    background: rgba(0, 0, 0, .7); color: #fff; font-size: 13px; line-height: 20px; padding: 0;
+  }
+  .audio-att { position: relative; display: flex; align-items: center; gap: 6px; width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 4px 30px 4px 6px; }
+  .audio-att audio { height: 32px; width: 100%; }
+  .audio-att .x { top: 50%; transform: translateY(-50%); right: 5px; }
+  .composer-actions { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+  .btn {
+    background: var(--panel-3); border: 1px solid var(--border-strong); border-radius: 8px; padding: 6px 11px;
+    display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  }
+  .btn:hover { border-color: #4a5264; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; margin-left: auto; }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn.rec { color: var(--text); }
+  .btn.rec.recording { background: rgba(239, 100, 97, .16); border-color: var(--danger); color: #ffb3b1; }
+  .btn.rec.recording .dot { animation: pulse 1s infinite; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--danger); display: inline-block; }
+  @keyframes pulse { 50% { opacity: .25; } }
+  .timer { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .hint { color: var(--muted); font-size: 11.5px; margin-top: 6px; }
+  .hint kbd { font-family: var(--mono); font-size: 10.5px; background: var(--panel-3); border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; }
+  .hint.warn { color: #e5a14b; }
+
+  .note {
+    display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; padding: 10px 10px 10px 8px;
+    border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel-2); margin-bottom: 8px;
+  }
+  .note input[type=checkbox] { width: 16px; height: 16px; margin: 2px 0 0 2px; accent-color: var(--ok); cursor: pointer; }
+  .note-text { white-space: pre-wrap; overflow-wrap: anywhere; outline: none; border-radius: 6px; }
+  .note-text[contenteditable=plaintext-only], .note-text[contenteditable=true] { background: var(--bg); box-shadow: 0 0 0 1px #4a5264; padding: 2px 4px; }
+  .note-text.placeholder { color: var(--muted); font-style: italic; }
+  .note audio { width: 100%; height: 32px; margin-top: 6px; display: block; }
+  .note .thumbs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .note .thumbs img { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); cursor: zoom-in; }
+  .note-meta { display: flex; align-items: center; gap: 8px; margin-top: 6px; color: var(--muted); font-size: 11.5px; }
+  .note-meta .icon-btn { width: 22px; height: 22px; font-size: 14px; }
+  .note-meta .edit:hover { color: var(--text); }
+  .note.done { background: transparent; }
+  .note.done .note-text { color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(127, 135, 154, .5); }
+  details.done-list summary { cursor: pointer; color: var(--muted); font-size: 12.5px; margin: 14px 0 8px; user-select: none; }
+  .notes-empty { color: var(--muted); font-size: 12.5px; padding: 6px 2px; }
+
+  /* ---------- overlays ---------- */
+  #drop {
+    position: fixed; inset: 0; background: rgba(14, 16, 20, .82); border: 3px dashed var(--accent);
+    display: none; place-items: center; z-index: 50; font-size: 18px; color: var(--text); pointer-events: none;
+  }
+  #drop.show { display: grid; }
+  #lightbox { position: fixed; inset: 0; background: rgba(0, 0, 0, .88); display: none; place-items: center; z-index: 60; cursor: zoom-out; padding: 24px; }
+  #lightbox.show { display: grid; }
+  #lightbox img { max-width: 100%; max-height: 100%; border-radius: 6px; box-shadow: 0 10px 40px rgba(0, 0, 0, .6); }
+  #toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0;
+    background: var(--panel-3); border: 1px solid var(--border-strong); border-radius: 8px; padding: 8px 14px;
+    transition: .2s; z-index: 70; pointer-events: none; font-size: 13px;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%); }
+  #toast.error { border-color: var(--danger); color: #ffc2c0; }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 1180px) {
+    .layout { grid-template-columns: 230px minmax(0, 1fr); }
+    .main-col { display: block; overflow-y: auto; min-height: 0; }
+    #feed, #notes { overflow: visible; }
+    #notes { border-left: none; border-top: 1px solid var(--border); }
+  }
+  @media (max-width: 760px) {
+    body { overflow: auto; display: block; }
+    .layout { display: block; }
+    aside { border-right: none; border-bottom: 1px solid var(--border); display: flex; gap: 6px; overflow-x: auto; padding: 8px; }
+    aside .section-title { display: none; }
+    .proj { width: auto; min-width: 150px; max-width: 220px; flex: none; }
+    #feed { padding: 14px; }
+    .main-col { overflow: visible; }
+    #notes { padding: 14px; }
+    .field { grid-template-columns: 1fr; gap: 0; }
+    .icon-btn { opacity: 1; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">A</div>
+  <h1>Agent Dashboard</h1>
+  <div class="live" id="live" title="Живые обновления с сервера"><i></i><span>нет связи</span></div>
+</header>
+
+<div class="layout">
+  <aside id="projects" aria-label="Проекты"></aside>
+  <div class="main-col">
+    <section id="feed" aria-label="Лента задач"></section>
+    <section id="notes" aria-label="Правки">
+      <h2>Правки <span class="pill notes" id="notes-count" hidden></span></h2>
+      <form class="composer" id="composer" autocomplete="off">
+        <input type="text" id="note-project" list="project-names" placeholder="Проект" required aria-label="Проект">
+        <datalist id="project-names"></datalist>
+        <textarea id="note-text" placeholder="Что поправить? Надиктуйте голосом или напишите. Скриншоты — Ctrl+V или перетащите сюда."></textarea>
+        <div class="interim" id="interim"></div>
+        <div class="attachments" id="attachments"></div>
+        <div class="composer-actions">
+          <button type="button" class="btn rec" id="rec-btn" title="Запись голоса с расшифровкой"><span class="dot"></span><span id="rec-label">Голос</span></button>
+          <span class="timer" id="rec-timer" hidden>0:00</span>
+          <label class="btn" title="Прикрепить картинки">📎<input type="file" id="file-input" accept="image/*" multiple hidden></label>
+          <button type="submit" class="btn primary" id="submit-btn">Добавить</button>
+        </div>
+        <div class="hint" id="composer-hint"><kbd>Ctrl</kbd>+<kbd>V</kbd> — вставить скриншот · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> — добавить</div>
+      </form>
+      <div id="notes-open"></div>
+      <details class="done-list" id="notes-done-wrap" hidden>
+        <summary id="notes-done-title">Сделано</summary>
+        <div id="notes-done"></div>
+      </details>
+    </section>
+  </div>
+</div>
+
+<div id="drop">Отпустите, чтобы прикрепить к правке</div>
+<div id="lightbox"><img alt=""></div>
+<div id="toast" role="status"></div>
+
+<script>
+'use strict';
+
+// ============ утилиты ============
+const $ = (sel) => document.querySelector(sel);
+
+function el(tag, attrs, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v === undefined || v === null || v === false) continue;
+    if (k === 'class') node.className = v;
+    else if (k === 'text') node.textContent = v;
+    else if (k.startsWith('on')) node.addEventListener(k.slice(2), v);
+    else if (k === 'dataset') Object.assign(node.dataset, v);
+    else node.setAttribute(k, v === true ? '' : v);
+  }
+  for (const c of children.flat()) {
+    if (c === undefined || c === null || c === false) continue;
+    node.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  }
+  return node;
+}
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, opts);
+  if (res.status === 204) return null;
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+  return body;
+}
+
+let toastTimer;
+function toast(msg, isError) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.className = 'show' + (isError ? ' error' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = ''; }, isError ? 4500 : 2200);
+}
+
+const rtf = new Intl.RelativeTimeFormat('ru', { numeric: 'auto' });
+function relTime(iso) {
+  if (!iso) return '';
+  const diff = (new Date(iso) - Date.now()) / 1000;
+  const abs = Math.abs(diff);
+  if (abs < 45) return 'только что';
+  if (abs < 3600) return rtf.format(Math.round(diff / 60), 'minute');
+  if (abs < 86400) return rtf.format(Math.round(diff / 3600), 'hour');
+  if (abs < 86400 * 30) return rtf.format(Math.round(diff / 86400), 'day');
+  return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+const fullTime = (iso) => new Date(iso).toLocaleString('ru-RU', { dateStyle: 'long', timeStyle: 'short' });
+const clockTime = (iso) => new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+function dayLabel(iso) {
+  const d = new Date(iso);
+  const start = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((start(new Date()) - start(d)) / 86400000);
+  if (days === 0) return 'Сегодня';
+  if (days === 1) return 'Вчера';
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'long', ...(sameYear ? {} : { year: 'numeric' }) });
+}
+function timeEl(iso, fmt) {
+  return el('time', { datetime: iso, title: fullTime(iso), dataset: { fmt } }, fmt === 'clock' ? clockTime(iso) : relTime(iso));
+}
+function refreshRelativeTimes() {
+  document.querySelectorAll('time[data-fmt=rel]').forEach((t) => { t.textContent = relTime(t.getAttribute('datetime')); });
+}
+const plural = (n, one, few, many) => {
+  const m10 = n % 10, m100 = n % 100;
+  return m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many;
+};
+
+// ============ состояние ============
+const PAGE = 50;
+const state = {
+  project: '',       // '' — все проекты
+  projects: [],
+  tasks: [],
+  hasMore: false,
+  notes: [],
+};
+
+function readHash() {
+  const m = location.hash.match(/^#p=(.*)$/);
+  return m ? decodeURIComponent(m[1]) : '';
+}
+function selectProject(name) {
+  const hash = name ? '#p=' + encodeURIComponent(name) : '';
+  if (location.hash !== hash) history.pushState(null, '', hash || location.pathname);
+  applyProject(name);
+}
+function defaultNoteProject() {
+  let last = '';
+  try { last = localStorage.getItem('lastNoteProject') || ''; } catch { /* storage недоступен */ }
+  return state.project || last || (state.projects[0] && state.projects[0].name) || '';
+}
+function applyProject(name) {
+  if (name !== state.project) state.tasks = [];
+  state.project = name;
+  if (name || !$('#note-project').value) $('#note-project').value = defaultNoteProject();
+  renderProjects();
+  loadTasks();
+  loadNotes();
+}
+window.addEventListener('popstate', () => applyProject(readHash()));
+
+// ============ загрузка ============
+async function loadProjects() {
+  try {
+    state.projects = await api('/api/projects');
+  } catch (e) { return toast('Не удалось загрузить проекты: ' + e.message, true); }
+  renderProjects();
+  const dl = $('#project-names');
+  dl.replaceChildren(...state.projects.map((p) => el('option', { value: p.name })));
+  if (!$('#note-project').value) $('#note-project').value = defaultNoteProject();
+}
+
+let tasksReq = 0;
+async function loadTasks({ append = false } = {}) {
+  const req = ++tasksReq;
+  const params = new URLSearchParams();
+  if (state.project) params.set('project', state.project);
+  if (append && state.tasks.length) {
+    params.set('before', state.tasks[state.tasks.length - 1].id);
+    params.set('limit', PAGE);
+  } else {
+    params.set('limit', Math.max(PAGE, state.tasks.length));
+  }
+  let rows;
+  try { rows = await api('/api/tasks?' + params); } catch (e) { return toast('Не удалось загрузить задачи: ' + e.message, true); }
+  if (req !== tasksReq) return;
+  state.hasMore = rows.length >= Number(params.get('limit'));
+  state.tasks = append ? state.tasks.concat(rows) : rows;
+  renderFeed();
+}
+
+let notesReq = 0;
+async function loadNotes() {
+  const req = ++notesReq;
+  const params = new URLSearchParams();
+  if (state.project) params.set('project', state.project);
+  let rows;
+  try { rows = await api('/api/notes?' + params); } catch (e) { return toast('Не удалось загрузить правки: ' + e.message, true); }
+  if (req !== notesReq) return;
+  state.notes = rows;
+  renderNotes();
+}
+
+// ============ проекты ============
+function renderProjects() {
+  const box = $('#projects');
+  const totalTasks = state.projects.reduce((s, p) => s + p.tasks, 0);
+  const totalNotes = state.projects.reduce((s, p) => s + p.open_notes, 0);
+  const item = (name, title, p) => el('button', {
+    class: 'proj' + (state.project === name ? ' active' : ''), type: 'button',
+    onclick: () => selectProject(name),
+  },
+    el('div', { class: 'proj-row' },
+      el('span', { class: 'proj-name', title }, title),
+      (p ? p.open_notes : totalNotes) > 0 && el('span', { class: 'pill notes', title: 'Открытые правки' }, '✎ ' + (p ? p.open_notes : totalNotes)),
+    ),
+    p && p.status && el('div', { class: 'proj-status', title: p.status }, p.status),
+    el('div', { class: 'proj-meta' },
+      p ? `${p.tasks} ${plural(p.tasks, 'задача', 'задачи', 'задач')}` : `${state.projects.length} ${plural(state.projects.length, 'проект', 'проекта', 'проектов')} · ${totalTasks} ${plural(totalTasks, 'задача', 'задачи', 'задач')}`,
+      p && p.last_activity ? ' · ' : '',
+      p && p.last_activity ? timeEl(p.last_activity, 'rel') : '',
+    ),
+  );
+  box.replaceChildren(
+    el('div', { class: 'section-title' }, 'Проекты'),
+    item('', 'Все проекты', null),
+    ...state.projects.map((p) => item(p.name, p.name, p)),
+  );
+  if (!state.projects.length) box.append(el('div', { class: 'empty-side' }, 'Проекты появятся после первой задачи или правки.'));
+}
+
+// ============ лента задач ============
+function splitPath(p) {
+  const i = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'));
+  return i < 0 ? ['', p] : [p.slice(0, i + 1), p.slice(i + 1)];
+}
+
+function clampable(text) {
+  const node = el('div', { class: 'text clamp' }, text);
+  const wrap = el('div', {}, node);
+  requestAnimationFrame(() => {
+    if (node.scrollHeight > node.clientHeight + 2) {
+      node.classList.add('can-expand');
+      const more = el('span', { class: 'more' }, 'показать полностью');
+      const toggle = () => {
+        const exp = node.classList.toggle('expanded');
+        more.textContent = exp ? 'свернуть' : 'показать полностью';
+      };
+      node.addEventListener('click', () => { if (!getSelection().toString()) toggle(); });
+      more.addEventListener('click', toggle);
+      wrap.append(more);
+    }
+  });
+  return wrap;
+}
+
+function taskCard(t) {
+  const showProject = !state.project;
+  const files = t.files || [];
+  return el('article', { class: 'task', dataset: { id: t.id } },
+    el('div', { class: 'task-meta' },
+      showProject && el('span', { class: 'chip link', title: 'Открыть проект', onclick: () => selectProject(t.project) }, t.project),
+      timeEl(t.created_at, 'clock'),
+      el('span', {
+        class: 'badge ' + (t.source === 'hook' ? 'hook' : 'agent'),
+        title: t.source === 'hook' ? 'Собрано хуком SessionEnd из транскрипта сессии' : 'Отчёт агента',
+      }, t.source === 'hook' ? 'авто · конец сессии' : 'отчёт агента'),
+      t.session_id && el('span', {
+        class: 'sid', title: 'Сессия ' + t.session_id + ' — нажмите, чтобы скопировать',
+        onclick: () => navigator.clipboard?.writeText(t.session_id).then(() => toast('session_id скопирован')),
+      }, '#' + t.session_id.slice(0, 8)),
+      el('button', { class: 'icon-btn', type: 'button', title: 'Удалить запись', onclick: () => deleteTask(t) }, '×'),
+    ),
+    t.task && el('div', { class: 'field req' }, el('div', { class: 'label' }, 'Запрос'), clampable(t.task)),
+    t.summary && el('div', { class: 'field' }, el('div', { class: 'label' }, t.source === 'hook' ? 'Итог' : 'Сделано'), clampable(t.summary)),
+    t.status && el('div', { class: 'status-line' }, el('b', {}, 'Статус проекта:'), ' ', t.status),
+    files.length > 0 && el('details', { class: 'files' },
+      el('summary', {}, `Файлы · ${files.length}`),
+      el('ul', {}, files.map((f) => { const [dir, base] = splitPath(f); return el('li', { title: f }, el('span', { class: 'dir' }, dir), base); })),
+    ),
+  );
+}
+
+function renderFeed() {
+  const feed = $('#feed');
+  const p = state.project && state.projects.find((x) => x.name === state.project);
+  const head = el('div', { class: 'feed-head' },
+    el('h2', {}, state.project || 'Все проекты'),
+    el('span', { class: 'sub' }, state.tasks.length ? 'свежие сверху' : ''),
+  );
+  const nodes = [head];
+  if (p && p.status) nodes.push(el('div', { class: 'project-status' }, el('b', {}, 'Статус проекта'), p.status));
+  if (!state.tasks.length) {
+    nodes.push(el('div', { class: 'empty' },
+      el('div', {}, 'Задач пока нет.'),
+      el('div', { style: 'margin-top:8px;font-size:12.5px' },
+        'Они появятся, когда агент завершит сессию (хук SessionEnd) или отправит отчёт: ',
+        el('code', {}, 'POST /api/tasks')),
+    ));
+  }
+  let lastDay = '';
+  for (const t of state.tasks) {
+    const day = dayLabel(t.created_at);
+    if (day !== lastDay) { nodes.push(el('div', { class: 'day' }, day)); lastDay = day; }
+    nodes.push(taskCard(t));
+  }
+  if (state.hasMore) nodes.push(el('button', { class: 'load-more', type: 'button', onclick: () => loadTasks({ append: true }) }, 'Показать ещё'));
+  // сохраняем раскрытые списки файлов между перерисовками
+  const open = new Set([...feed.querySelectorAll('.task')].filter((c) => c.querySelector('details[open]')).map((c) => c.dataset.id));
+  feed.replaceChildren(...nodes);
+  open.forEach((id) => feed.querySelector(`.task[data-id="${id}"] details`)?.setAttribute('open', ''));
+}
+
+async function deleteTask(t) {
+  if (!confirm('Удалить эту запись из ленты?')) return;
+  try {
+    await api('/api/tasks/' + t.id, { method: 'DELETE' });
+    state.tasks = state.tasks.filter((x) => x.id !== t.id);
+    renderFeed();
+    loadProjects();
+  } catch (e) { toast(e.message, true); }
+}
+
+// ============ правки: список ============
+function noteItem(n) {
+  const done = n.status === 'done';
+  const textNode = el('div', { class: 'note-text' + (n.text ? '' : ' placeholder') }, n.text || 'без текста');
+  const startEdit = () => {
+    if (textNode.isContentEditable) return;
+    editingNote = true;
+    let cancelled = false;
+    const original = n.text;
+    textNode.textContent = original;
+    textNode.classList.remove('placeholder');
+    try { textNode.contentEditable = 'plaintext-only'; } catch { textNode.contentEditable = 'true'; }
+    if (!textNode.isContentEditable) textNode.contentEditable = 'true';
+    textNode.focus();
+    getSelection().selectAllChildren(textNode);
+    getSelection().collapseToEnd();
+    const finish = async (save) => {
+      textNode.removeEventListener('keydown', onKey);
+      textNode.contentEditable = 'false';
+      const value = textNode.innerText.trim();
+      if (save && value !== original) {
+        try {
+          const updated = await api('/api/notes/' + n.id, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: value }),
+          });
+          Object.assign(n, updated);
+          toast('Текст правки сохранён');
+        } catch (e) { toast(e.message, true); }
+      }
+      editingNote = false;
+      renderNotes();
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); cancelled = true; textNode.blur(); }
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); textNode.blur(); }
+    };
+    textNode.addEventListener('keydown', onKey);
+    textNode.addEventListener('blur', () => finish(!cancelled), { once: true });
+  };
+  textNode.addEventListener('dblclick', startEdit);
+
+  return el('div', { class: 'note' + (done ? ' done' : ''), dataset: { id: n.id } },
+    el('input', {
+      type: 'checkbox', checked: done, title: done ? 'Вернуть в работу' : 'Отметить «сделано»',
+      'aria-label': 'Сделано', onchange: (e) => setNoteStatus(n, e.target.checked ? 'done' : 'open'),
+    }),
+    el('div', {},
+      textNode,
+      n.audio_path && el('audio', { controls: true, preload: 'none', src: n.audio_path }),
+      n.images.length > 0 && el('div', { class: 'thumbs' }, n.images.map((src) => el('img', { src, alt: 'скриншот', loading: 'lazy', onclick: () => openLightbox(src) }))),
+      el('div', { class: 'note-meta' },
+        !state.project && el('span', { class: 'chip link', onclick: () => selectProject(n.project) }, n.project),
+        el('span', {}, '#' + n.id),
+        timeEl(done && n.done_at ? n.done_at : n.created_at, 'rel'),
+        done && el('span', {}, '· сделано'),
+        el('button', { class: 'icon-btn edit', type: 'button', title: 'Редактировать текст (или двойной клик)', onclick: startEdit, style: 'margin-left:auto' }, '✎'),
+        el('button', { class: 'icon-btn', type: 'button', title: 'Удалить правку', onclick: () => deleteNote(n), style: 'margin-left:0' }, '×'),
+      ),
+    ),
+  );
+}
+
+let editingNote = false;
+function renderNotes() {
+  // не перерисовываем список, пока пользователь редактирует текст правки
+  if (editingNote) return;
+  const open = state.notes.filter((n) => n.status === 'open');
+  const done = state.notes.filter((n) => n.status === 'done');
+  $('#notes-open').replaceChildren(
+    ...(open.length ? open.map(noteItem) : [el('div', { class: 'notes-empty' }, 'Открытых правок нет.')]),
+  );
+  const count = $('#notes-count');
+  count.hidden = !open.length;
+  count.textContent = open.length;
+  $('#notes-done-wrap').hidden = !done.length;
+  $('#notes-done-title').textContent = `Сделано (${done.length})`;
+  $('#notes-done').replaceChildren(...done.map(noteItem));
+}
+
+async function setNoteStatus(n, status) {
+  try {
+    const updated = await api('/api/notes/' + n.id, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }),
+    });
+    Object.assign(n, updated);
+    renderNotes();
+    loadProjects();
+  } catch (e) { toast(e.message, true); renderNotes(); }
+}
+
+async function deleteNote(n) {
+  if (!confirm('Удалить правку вместе с аудио и картинками?')) return;
+  try {
+    await api('/api/notes/' + n.id, { method: 'DELETE' });
+    state.notes = state.notes.filter((x) => x.id !== n.id);
+    renderNotes();
+    loadProjects();
+  } catch (e) { toast(e.message, true); }
+}
+
+function openLightbox(src) {
+  $('#lightbox img').src = src;
+  $('#lightbox').classList.add('show');
+}
+$('#lightbox').addEventListener('click', () => $('#lightbox').classList.remove('show'));
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('#lightbox').classList.remove('show'); });
+
+// ============ правки: новая ============
+const pending = { audio: null, audioUrl: null, images: [] };
+
+function renderAttachments() {
+  const box = $('#attachments');
+  const nodes = [];
+  if (pending.audio) {
+    nodes.push(el('div', { class: 'audio-att' },
+      el('audio', { controls: true, src: pending.audioUrl }),
+      el('button', { class: 'x', type: 'button', title: 'Убрать запись', onclick: () => { setAudio(null); } }, '×'),
+    ));
+  }
+  pending.images.forEach((img, i) => {
+    nodes.push(el('div', { class: 'thumb' },
+      el('img', { src: img.url, alt: img.file.name, onclick: () => openLightbox(img.url) }),
+      el('button', { class: 'x', type: 'button', title: 'Убрать', onclick: () => { URL.revokeObjectURL(img.url); pending.images.splice(i, 1); renderAttachments(); } }, '×'),
+    ));
+  });
+  box.replaceChildren(...nodes);
+}
+
+function setAudio(blob) {
+  if (pending.audioUrl) URL.revokeObjectURL(pending.audioUrl);
+  pending.audio = blob;
+  pending.audioUrl = blob ? URL.createObjectURL(blob) : null;
+  renderAttachments();
+}
+
+function addFiles(files) {
+  let skipped = 0;
+  for (const f of files) {
+    if (f.type.startsWith('image/')) pending.images.push({ file: f, url: URL.createObjectURL(f) });
+    else if (f.type.startsWith('audio/')) setAudio(f);
+    else skipped++;
+  }
+  if (skipped) toast('Можно прикреплять только картинки и аудио', true);
+  renderAttachments();
+}
+
+// Ctrl+V со скриншотом — в любом месте страницы
+document.addEventListener('paste', (e) => {
+  const files = [...(e.clipboardData?.items || [])]
+    .filter((i) => i.kind === 'file' && i.type.startsWith('image/'))
+    .map((i) => i.getAsFile()).filter(Boolean);
+  if (!files.length) return;
+  e.preventDefault();
+  addFiles(files);
+  toast(files.length > 1 ? `Добавлено скриншотов: ${files.length}` : 'Скриншот добавлен к правке');
+});
+
+// drag & drop на всё окно
+let dragDepth = 0;
+const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
+window.addEventListener('dragenter', (e) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth++; $('#drop').classList.add('show'); });
+window.addEventListener('dragover', (e) => { if (hasFiles(e)) e.preventDefault(); });
+window.addEventListener('dragleave', (e) => { if (!hasFiles(e)) return; if (--dragDepth <= 0) { dragDepth = 0; $('#drop').classList.remove('show'); } });
+window.addEventListener('drop', (e) => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  dragDepth = 0;
+  $('#drop').classList.remove('show');
+  addFiles([...e.dataTransfer.files]);
+});
+$('#file-input').addEventListener('change', (e) => { addFiles([...e.target.files]); e.target.value = ''; });
+
+$('#note-text').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $('#composer').requestSubmit(); }
+});
+
+$('#composer').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (recorder && recorder.state !== 'inactive') {
+    await stopRecording();
+    // финальный кусок расшифровки приходит чуть позже остановки
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  const project = $('#note-project').value.trim();
+  const text = $('#note-text').value.trim();
+  if (!project) { $('#note-project').focus(); return toast('Укажите проект', true); }
+  if (!text && !pending.audio && !pending.images.length) { $('#note-text').focus(); return toast('Правка пустая', true); }
+  const fd = new FormData();
+  fd.append('project', project);
+  fd.append('text', text);
+  if (pending.audio) {
+    const ext = (pending.audio.type.match(/audio\/(\w+)/) || [, 'webm'])[1].replace('mpeg', 'mp3').replace('mp4', 'm4a');
+    fd.append('audio', pending.audio, pending.audio.name || `voice.${ext}`);
+  }
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  pending.images.forEach((img, i) => fd.append('images', img.file, img.file.name && img.file.name !== 'image.png' ? img.file.name : `screenshot-${stamp}-${i + 1}.png`));
+  const btn = $('#submit-btn');
+  btn.disabled = true;
+  try {
+    await api('/api/notes', { method: 'POST', body: fd });
+    try { localStorage.setItem('lastNoteProject', project); } catch { /* storage недоступен */ }
+    $('#note-text').value = '';
+    $('#interim').textContent = '';
+    setAudio(null);
+    pending.images.forEach((img) => URL.revokeObjectURL(img.url));
+    pending.images = [];
+    renderAttachments();
+    toast(state.project && project !== state.project ? `Правка добавлена в проект «${project}»` : 'Правка добавлена');
+    loadNotes();
+    loadProjects();
+  } catch (err) {
+    toast('Не удалось сохранить: ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ============ голос: MediaRecorder + Web Speech API ============
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recorder = null, recStream = null, recognition = null, recStartedAt = 0, recTimer = null;
+let recognitionBroken = false, recognitionWanted = false, stopResolve = null;
+
+function setHint(text, warn) {
+  const h = $('#composer-hint');
+  if (!text) {
+    h.className = 'hint';
+    h.innerHTML = '<kbd>Ctrl</kbd>+<kbd>V</kbd> — вставить скриншот · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> — добавить';
+  } else {
+    h.className = 'hint' + (warn ? ' warn' : '');
+    h.textContent = text;
+  }
+}
+
+function appendTranscript(chunk) {
+  const ta = $('#note-text');
+  const clean = chunk.trim();
+  if (!clean) return;
+  const cur = ta.value;
+  const needsSpace = cur && !/\s$/.test(cur);
+  const capital = !cur.trim() || /[.!?]\s*$/.test(cur) ? clean[0].toUpperCase() + clean.slice(1) : clean;
+  ta.value = cur + (needsSpace ? ' ' : '') + capital;
+  ta.scrollTop = ta.scrollHeight;
+}
+
+function startRecognition() {
+  if (!SpeechRecognition) {
+    setHint('Расшифровка голоса работает в Chrome/Edge. Аудио всё равно сохранится — текст можно дописать вручную.', true);
+    return;
+  }
+  recognitionBroken = false;
+  recognitionWanted = true;
+  const start = () => {
+    recognition = new SpeechRecognition();
+    recognition.lang = 'ru-RU';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.onresult = (e) => {
+      let interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r.isFinal) appendTranscript(r[0].transcript);
+        else interim += r[0].transcript;
+      }
+      $('#interim').textContent = interim;
+    };
+    recognition.onerror = (e) => {
+      if (e.error === 'no-speech' || e.error === 'aborted') return;
+      recognitionBroken = true;
+      const msg = {
+        'not-allowed': 'Браузер запретил распознавание речи. Аудио записывается, текст можно ввести вручную.',
+        'service-not-allowed': 'Сервис распознавания недоступен в этом браузере. Аудио записывается.',
+        network: 'Нет связи с сервисом распознавания речи. Аудио записывается.',
+        'language-not-supported': 'Русский язык не поддерживается распознаванием в этом браузере.',
+      }[e.error] || `Ошибка распознавания: ${e.error}. Аудио записывается.`;
+      setHint(msg, true);
+    };
+    // Chrome сам останавливает распознавание после паузы — перезапускаем, пока идёт запись
+    recognition.onend = () => {
+      $('#interim').textContent = '';
+      if (recognitionWanted && !recognitionBroken) { try { start(); } catch { /* ignore */ } }
+    };
+    recognition.start();
+  };
+  try { start(); } catch (e) { setHint('Не удалось запустить распознавание: ' + e.message, true); }
+}
+
+function pickMime() {
+  for (const m of ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus']) {
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m;
+  }
+  return '';
+}
+
+async function startRecording() {
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+    return toast('Браузер не поддерживает запись звука', true);
+  }
+  try {
+    recStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (e) {
+    return toast('Нет доступа к микрофону: ' + (e.message || e.name), true);
+  }
+  const mime = pickMime();
+  const chunks = [];
+  recorder = new MediaRecorder(recStream, mime ? { mimeType: mime } : undefined);
+  recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+  recorder.onstop = () => {
+    recStream.getTracks().forEach((t) => t.stop());
+    if (chunks.length) setAudio(new Blob(chunks, { type: (recorder.mimeType || 'audio/webm').split(';')[0] }));
+    if (stopResolve) { stopResolve(); stopResolve = null; }
+  };
+  recorder.start(1000);
+  recStartedAt = Date.now();
+  $('#rec-btn').classList.add('recording');
+  $('#rec-label').textContent = 'Стоп';
+  $('#rec-timer').hidden = false;
+  const tick = () => {
+    const s = Math.floor((Date.now() - recStartedAt) / 1000);
+    $('#rec-timer').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  };
+  tick();
+  recTimer = setInterval(tick, 500);
+  setHint('Идёт запись… говорите. Текст появится в поле, его можно поправить.');
+  startRecognition();
+}
+
+function stopRecording() {
+  recognitionWanted = false;
+  try { recognition && recognition.stop(); } catch { /* ignore */ }
+  clearInterval(recTimer);
+  $('#rec-btn').classList.remove('recording');
+  $('#rec-label').textContent = 'Голос';
+  $('#rec-timer').hidden = true;
+  if (!recognitionBroken) setHint('');
+  return new Promise((resolve) => {
+    if (!recorder || recorder.state === 'inactive') return resolve();
+    stopResolve = resolve;
+    recorder.stop();
+  });
+}
+
+$('#rec-btn').addEventListener('click', () => {
+  if (recorder && recorder.state === 'recording') stopRecording();
+  else startRecording();
+});
+
+// ============ живые обновления ============
+function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+const refreshTasks = debounce(() => loadTasks(), 150);
+const refreshNotes = debounce(() => loadNotes(), 150);
+const refreshProjects = debounce(() => loadProjects(), 150);
+
+function connectEvents() {
+  const live = $('#live');
+  const es = new EventSource('/api/events');
+  es.onopen = () => {
+    live.classList.add('on');
+    live.querySelector('span').textContent = 'онлайн';
+    // после переподключения могли пропустить события
+    refreshProjects(); refreshTasks(); refreshNotes();
+  };
+  es.onerror = () => {
+    live.classList.remove('on');
+    live.querySelector('span').textContent = 'нет связи — переподключаюсь…';
+  };
+  es.addEventListener('change', (e) => {
+    const { kind } = JSON.parse(e.data);
+    refreshProjects();
+    if (kind === 'task') refreshTasks();
+    if (kind === 'note') refreshNotes();
+  });
+}
+
+// ============ старт ============
+setInterval(refreshRelativeTimes, 30000);
+state.project = readHash();
+loadProjects().then(() => applyProject(state.project));
+connectEvents();
+</script>
+</body>
+</html>
