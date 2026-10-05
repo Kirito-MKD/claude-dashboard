@@ -208,3 +208,119 @@ test('главная страница отдаётся', async () => {
   assert.equal(res.status, 200);
   assert.match(await res.text(), /Agent Dashboard/);
 });
+
+// ---------- проекты: закрепление, архив, этапы, прогресс ----------
+
+const patchProject = (name, body) => call(`/api/projects/${encodeURIComponent(name)}`, json('PATCH', body));
+const getProject = (name) => call(`/api/projects/${encodeURIComponent(name)}`);
+
+test('закрепление и архив проектов; новая активность возвращает проект из архива', async () => {
+  await call('/api/tasks', json('POST', { project: 'arch-a', task: 'x' }));
+  await call('/api/tasks', json('POST', { project: 'arch-b', task: 'y' }));
+  await call('/api/notes', json('POST', { project: 'arch-b', text: 'правка' }));
+
+  const pinned = await patchProject('arch-a', { pinned: true });
+  assert.equal(pinned.status, 200);
+  assert.equal(pinned.body.pinned, true);
+  let list = (await call('/api/projects')).body;
+  assert.equal(list[0].name, 'arch-a', 'закреплённый проект первым');
+
+  const archived = await patchProject('arch-b', { archived: true });
+  assert.equal(archived.body.archived, true);
+  list = (await call('/api/projects')).body;
+  assert.equal(list.find((p) => p.name === 'arch-b').archived, true);
+
+  // в общей ленте архивные проекты можно скрыть
+  const all = (await call('/api/tasks?hide_archived=1')).body;
+  assert.ok(!all.some((t) => t.project === 'arch-b'));
+  assert.ok(all.some((t) => t.project === 'arch-a'));
+  const notes = (await call('/api/notes?hide_archived=1&status=open')).body;
+  assert.ok(!notes.some((n) => n.project === 'arch-b'));
+  // а по проекту — всё видно
+  assert.equal((await call('/api/tasks?project=arch-b')).body.length, 1);
+
+  await call('/api/tasks', json('POST', { project: 'arch-b', task: 'снова в работе' }));
+  assert.equal((await getProject('arch-b')).body.archived, false, 'новая задача разархивирует');
+
+  assert.equal((await patchProject('arch-a', {})).status, 400);
+  assert.equal((await getProject('nope-nope')).status, 404);
+  assert.equal((await patchProject('nope-nope', { pinned: true })).status, 404, 'опечатка не создаёт пустой проект');
+  assert.ok(!(await call('/api/projects')).body.some((p) => p.name === 'nope-nope'));
+});
+
+test('этапы: план через PUT, задача с этапом и прогрессом, клик по этапу даёт его задачи', async () => {
+  const name = 'Магазин игрушек';
+  const put = await call(`/api/projects/${encodeURIComponent(name)}/stages`, json('PUT', {
+    stages: [
+      { title: 'Прототип', description: 'Каркас и макеты', status: 'done' },
+      { title: 'Каталог', description: 'Список товаров, фильтры', status: 'in_progress' },
+      'Оплата',
+    ],
+  }));
+  assert.equal(put.status, 200, JSON.stringify(put.body));
+  assert.deepEqual(put.body.stages.map((s) => [s.title, s.status]), [['Прототип', 'done'], ['Каталог', 'active'], ['Оплата', 'todo']]);
+  assert.ok(put.body.stages[0].completed_at, 'дата завершения этапа');
+  assert.equal(put.body.progress, 50, '(1 готов + 0.5 текущий) / 3');
+
+  // задача с этапом (регистр не важен) и процентом
+  const t = await call('/api/tasks', json('POST', { project: name, task: 'Фильтры', summary: 'Добавил фильтр по цене', stage: 'каталог', progress: 45, session_id: 'st-1' }));
+  assert.equal(t.body.stage, 'Каталог');
+  // хук той же сессии наследует этап отчёта агента
+  const hook = await call('/api/tasks', json('POST', { project: name, task: 'Фильтры', files: ['a.js'], session_id: 'st-1', source: 'hook' }));
+  assert.equal(hook.body.stage, 'Каталог');
+  // неизвестный этап создаётся и становится текущим; todo-этап при задаче становится active
+  await call('/api/tasks', json('POST', { project: name, task: 'Доставка', stage: 'Доставка' }));
+  await call('/api/tasks', json('POST', { project: name, task: 'Платёжка', stage: 'Оплата' }));
+
+  const p = (await getProject(name)).body;
+  assert.equal(p.progress, 45, 'процент агента важнее расчётного');
+  assert.deepEqual(p.stages.map((s) => [s.title, s.status]), [['Прототип', 'done'], ['Каталог', 'active'], ['Оплата', 'active'], ['Доставка', 'active']]);
+  const catalog = p.stages.find((s) => s.title === 'Каталог');
+  assert.deepEqual(catalog.tasks.map((x) => x.source).sort(), ['agent', 'hook']);
+  assert.equal(catalog.description, 'Список товаров, фильтры');
+  assert.equal((await call(`/api/tasks?project=${encodeURIComponent(name)}&stage=${encodeURIComponent('Каталог')}`)).body.length, 2);
+
+  // повторный PUT без описаний: описания и даты сохраняются; удалённый этап исчезает
+  const put2 = await call('/api/stages', json('PUT', { project: name, progress: null, stages: [
+    { title: 'Прототип', status: 'done' }, { title: 'Каталог', status: 'done' }, { title: 'Оплата', status: 'active' },
+  ] }));
+  assert.equal(put2.status, 200);
+  assert.deepEqual(put2.body.stages.map((s) => s.title), ['Прототип', 'Каталог', 'Оплата']);
+  assert.equal(put2.body.stages[1].description, 'Список товаров, фильтры');
+  assert.equal(put2.body.stages[0].completed_at, put.body.stages[0].completed_at);
+
+  // сброс процента агента — снова считается по этапам
+  const cleared = await patchProject(name, { progress: null });
+  assert.equal(cleared.body.progress, 83, '(2 + 0.5) / 3');
+
+  // переименование этапа из интерфейса тянет за собой задачи
+  const stageId = put2.body.stages[1].id;
+  const renamed = await call(`/api/projects/${encodeURIComponent(name)}/stages/${stageId}`, json('PATCH', { title: 'Каталог товаров' }));
+  assert.equal(renamed.body.title, 'Каталог товаров');
+  assert.equal((await call(`/api/tasks?project=${encodeURIComponent(name)}&stage=${encodeURIComponent('Каталог товаров')}`)).body.length, 2);
+
+  // ошибки валидации
+  assert.equal((await call('/api/stages', json('PUT', { project: name, stages: ['A', 'a'] }))).status, 400);
+  assert.equal((await call('/api/stages', json('PUT', { project: name, stages: [{ title: 'X', status: 'maybe' }] }))).status, 400);
+  assert.equal((await call('/api/stages', json('PUT', { stages: [] }))).status, 400);
+  assert.equal((await call(`/api/projects/${encodeURIComponent(name)}/stages/999999`, json('PATCH', { status: 'done' }))).status, 404);
+  assert.equal((await call('/api/tasks', json('POST', { project: name, progress: 'много' }))).status, 400);
+});
+
+test('done_by: из интерфейса — user, по умолчанию (curl агента) — claude, при возврате — сбрасывается', async () => {
+  const a = await call('/api/notes', json('POST', { project: 'doneby', text: 'a' }));
+  const b = await call('/api/notes', json('POST', { project: 'doneby', text: 'b' }));
+  const byClaude = await call(`/api/notes/${a.body.id}`, json('PATCH', { status: 'done' }));
+  assert.equal(byClaude.body.done_by, 'claude');
+  const byUser = await call(`/api/notes/${b.body.id}`, json('PATCH', { status: 'done', done_by: 'user' }));
+  assert.equal(byUser.body.done_by, 'user');
+  const reopened = await call(`/api/notes/${b.body.id}`, json('PATCH', { status: 'open' }));
+  assert.equal(reopened.body.done_by, null);
+  assert.equal((await call(`/api/notes/${a.body.id}`, json('PATCH', { status: 'done', done_by: 'robot' }))).status, 400);
+});
+
+test('health сообщает pid и версию (нужно для перезапуска)', async () => {
+  const r = await call('/api/health');
+  assert.equal(r.body.app, 'agent-dashboard');
+  assert.equal(r.body.pid, process.pid);
+});

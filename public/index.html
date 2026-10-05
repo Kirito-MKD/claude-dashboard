@@ -4,213 +4,360 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Agent Dashboard</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23d97757'/%3E%3Cpath d='M9 22V10h3l4 7 4-7h3v12h-3v-7l-4 7-4-7v7z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%238b5cf6'/%3E%3Cstop offset='.55' stop-color='%23ec4899'/%3E%3Cstop offset='1' stop-color='%23fb923c'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='8' fill='url(%23g)'/%3E%3Cpath d='M9 22V10h3l4 7 4-7h3v12h-3v-7l-4 7-4-7v7z' fill='%23fff'/%3E%3C/svg%3E">
 <style>
   :root {
     color-scheme: dark;
-    --bg: #0e1014;
-    --panel: #15181e;
-    --panel-2: #1b1f27;
-    --panel-3: #222733;
-    --border: #272c37;
-    --border-strong: #353b49;
-    --text: #e6e8ee;
-    --text-2: #b7bdcb;
-    --muted: #7f879a;
-    --accent: #d97757;
-    --accent-soft: rgba(217, 119, 87, .14);
-    --blue: #7aa2f7;
-    --blue-soft: rgba(122, 162, 247, .13);
-    --ok: #4cc38a;
-    --ok-soft: rgba(76, 195, 138, .13);
-    --danger: #ef6461;
-    --radius: 10px;
+    --bg: #0a0b1e;
+    --glass: rgba(14, 15, 40, .52);
+    --glass-strong: rgba(14, 15, 38, .86);
+    --card: rgba(18, 18, 46, .56);
+    --card-hover: rgba(26, 26, 60, .64);
+    --input: rgba(8, 8, 24, .6);
+    --border: rgba(196, 181, 253, .14);
+    --border-strong: rgba(196, 181, 253, .3);
+    --text: #f2eefc;
+    --text-2: #d2cbec;
+    --muted: #a39dc6;
+    --accent: #ff9e6d;
+    --accent-soft: rgba(255, 158, 109, .16);
+    --pink: #f580bd;
+    --pink-soft: rgba(245, 128, 189, .15);
+    --violet: #b49bff;
+    --violet-soft: rgba(180, 155, 255, .16);
+    --sky: #93c8ff;
+    --sky-soft: rgba(147, 200, 255, .14);
+    --ok: #74e8bd;
+    --ok-soft: rgba(116, 232, 189, .14);
+    --danger: #ff7b90;
+    --grad: linear-gradient(90deg, #8b5cf6 0%, #ec4899 55%, #fb923c 100%);
+    --radius: 12px;
+    --blur: blur(18px) saturate(150%);
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { height: 100%; }
   body {
     margin: 0; background: var(--bg); color: var(--text);
-    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     display: grid; grid-template-rows: auto 1fr; overflow: hidden;
   }
-  button, input, textarea { font: inherit; color: inherit; }
+  /* фон: картинка из public/background.jpg, слегка размытая и притемнённая для читаемости */
+  .bg-wrap { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+  .bg, .bg-shade { position: absolute; }
+  /* слой шире экрана, чтобы размытие не давало светлых краёв; обрезается .bg-wrap */
+  .bg { inset: -30px; background: url(background.jpg) center 40% / cover no-repeat; filter: blur(4px) saturate(120%); }
+  .bg-shade { inset: 0; background: linear-gradient(180deg, rgba(10, 11, 30, .12) 0%, rgba(10, 11, 30, .28) 55%, rgba(10, 11, 30, .5) 100%); }
+  button, input, textarea, select { font: inherit; color: inherit; }
   button { cursor: pointer; }
+  a { color: var(--sky); }
+  ::selection { background: rgba(236, 72, 153, .35); }
   ::-webkit-scrollbar { width: 10px; height: 10px; }
-  ::-webkit-scrollbar-thumb { background: #2a303c; border-radius: 10px; border: 2px solid var(--bg); }
+  ::-webkit-scrollbar-thumb { background: rgba(196, 181, 253, .22); border-radius: 10px; border: 2px solid transparent; background-clip: padding-box; }
   ::-webkit-scrollbar-track { background: transparent; }
+  .glass { background: var(--glass); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); }
+  svg.i { width: 15px; height: 15px; flex: none; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
   /* ---------- header ---------- */
-  header {
-    display: flex; align-items: center; gap: 12px; padding: 10px 18px;
-    border-bottom: 1px solid var(--border); background: var(--panel);
-  }
-  .logo { width: 24px; height: 24px; border-radius: 7px; background: var(--accent); display: grid; place-items: center; font-weight: 700; font-size: 13px; color: #fff; }
+  header { display: flex; align-items: center; gap: 12px; padding: 10px 18px; border-bottom: 1px solid var(--border); }
+  .logo { width: 26px; height: 26px; border-radius: 8px; background: var(--grad); display: grid; place-items: center; font-weight: 700; font-size: 13px; color: #fff; box-shadow: 0 0 18px rgba(236, 72, 153, .45); }
   header h1 { font-size: 15px; font-weight: 600; margin: 0; letter-spacing: .2px; }
   .live { margin-left: auto; display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; }
   .live i { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
   .live.on i { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
 
   /* ---------- layout ---------- */
-  .layout { display: grid; grid-template-columns: 260px minmax(0, 1fr) 400px; min-height: 0; }
+  .layout { display: grid; grid-template-columns: 272px minmax(0, 1fr) 410px; min-height: 0; }
   aside, #feed, #notes { min-height: 0; overflow-y: auto; }
   .main-col { display: contents; }
-  aside { border-right: 1px solid var(--border); background: var(--panel); padding: 12px 10px; }
-  #notes { border-left: 1px solid var(--border); background: var(--panel); padding: 16px; }
-  #feed { padding: 16px 22px 40px; }
+  aside { border-right: 1px solid var(--border); padding: 12px 10px 24px; }
+  #notes { border-left: 1px solid var(--border); padding: 16px; }
+  #feed { padding: 18px 24px 48px; }
+  .section-title { font-size: 11px; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); margin: 14px 10px 6px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .section-title:first-child { margin-top: 4px; }
 
-  .section-title { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 4px 8px 8px; font-weight: 600; }
-
-  /* ---------- projects ---------- */
+  /* ---------- проекты ---------- */
   .proj {
-    display: block; width: 100%; text-align: left; background: none; border: 1px solid transparent;
-    border-radius: 8px; padding: 8px 10px; margin-bottom: 2px;
+    position: relative; display: block; width: 100%; text-align: left; border: 1px solid transparent;
+    border-radius: 10px; padding: 8px 10px; margin-bottom: 2px; cursor: pointer; outline: none;
   }
-  .proj:hover { background: var(--panel-2); }
-  .proj.active { background: var(--panel-3); border-color: var(--border-strong); }
-  .proj-row { display: flex; align-items: center; gap: 8px; }
+  .proj:hover, .proj:focus-visible { background: rgba(196, 181, 253, .07); }
+  .proj.active { background: rgba(196, 181, 253, .12); border-color: var(--border-strong); }
+  .proj.archived .proj-name { color: var(--text-2); }
+  .proj-row { display: flex; align-items: center; gap: 6px; }
   .proj-name { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .proj-name .pin-mark { color: var(--accent); margin-left: 4px; vertical-align: -2px; }
   .proj-status { color: var(--text-2); font-size: 12px; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .proj-meta { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
-  .pill { font-size: 11px; font-weight: 600; border-radius: 99px; padding: 1px 7px; background: var(--panel-3); color: var(--muted); white-space: nowrap; }
+  .mini { display: flex; align-items: center; gap: 7px; margin-top: 5px; }
+  .mini-bar { flex: 1; height: 4px; border-radius: 4px; background: rgba(196, 181, 253, .14); overflow: hidden; }
+  .mini-bar i { display: block; height: 100%; background: var(--grad); border-radius: 4px; }
+  .mini span { font-size: 11px; color: var(--text-2); font-variant-numeric: tabular-nums; min-width: 30px; text-align: right; }
+  .proj-actions { position: absolute; top: 6px; right: 6px; display: none; gap: 2px; background: var(--glass-strong); border-radius: 8px; padding: 2px; border: 1px solid var(--border); }
+  .proj:hover .proj-actions, .proj:focus-within .proj-actions { display: flex; }
+  .pill { font-size: 11px; font-weight: 600; border-radius: 99px; padding: 1px 7px; background: rgba(196, 181, 253, .12); color: var(--muted); white-space: nowrap; }
   .pill.notes { background: var(--accent-soft); color: var(--accent); }
   .empty-side { color: var(--muted); font-size: 12.5px; padding: 8px 10px; }
+  details.archive > summary { list-style: none; cursor: pointer; user-select: none; }
+  details.archive > summary::-webkit-details-marker { display: none; }
+  details.archive > summary .chev { transition: transform .15s; }
+  details.archive[open] > summary .chev { transform: rotate(90deg); }
+  details.archive > summary:hover { color: var(--text-2); }
 
-  /* ---------- feed ---------- */
-  .feed-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
-  .feed-head h2 { margin: 0; font-size: 18px; font-weight: 600; }
-  .feed-head .sub { color: var(--muted); font-size: 12.5px; }
-  .project-status {
-    background: var(--blue-soft); border: 1px solid rgba(122, 162, 247, .25); color: #c9d7fb;
-    border-radius: var(--radius); padding: 8px 12px; margin-bottom: 14px; font-size: 13px; white-space: pre-wrap;
+  .icon-btn {
+    background: none; border: none; color: var(--muted); border-radius: 6px; width: 26px; height: 26px;
+    display: inline-grid; place-items: center; padding: 0; font-size: 15px; line-height: 1;
   }
-  .project-status b { color: var(--blue); font-weight: 600; margin-right: 6px; }
-  .day { font-size: 12px; color: var(--muted); font-weight: 600; margin: 18px 2px 8px; text-transform: uppercase; letter-spacing: .06em; }
+  .icon-btn:hover { background: rgba(196, 181, 253, .14); color: var(--text); }
+  .icon-btn.danger:hover { color: var(--danger); }
+  .icon-btn.on { color: var(--accent); }
+
+  /* ---------- шапка проекта ---------- */
+  .feed-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .feed-head h2 { margin: 0; font-size: 20px; font-weight: 650; text-shadow: 0 2px 12px rgba(0, 0, 0, .5); }
+  .feed-head .sub { color: var(--text-2); font-size: 12.5px; text-shadow: 0 1px 6px rgba(0, 0, 0, .6); }
+  .head-actions { margin-left: auto; display: flex; gap: 6px; }
+  .ghost-btn {
+    display: inline-flex; align-items: center; gap: 6px; border-radius: 8px; padding: 5px 10px; font-size: 12.5px;
+    background: var(--glass); border: 1px solid var(--border); color: var(--text-2);
+    backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+  }
+  .ghost-btn:hover { border-color: var(--border-strong); color: var(--text); }
+  .ghost-btn.on { color: var(--accent); border-color: rgba(255, 158, 109, .4); }
+  .tag { font-size: 11.5px; border-radius: 6px; padding: 2px 8px; font-weight: 600; display: inline-flex; gap: 4px; align-items: center; }
+  .tag.archived { background: rgba(196, 181, 253, .14); color: var(--text-2); }
+  .tag.pinned { background: var(--accent-soft); color: var(--accent); }
+  .project-status {
+    background: var(--glass); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+    border: 1px solid var(--border); border-left: 3px solid var(--sky);
+    border-radius: var(--radius); padding: 9px 14px; margin-bottom: 12px; font-size: 13px; white-space: pre-wrap; color: var(--text-2);
+  }
+  .project-status b { color: var(--sky); font-weight: 600; margin-right: 6px; }
+
+  /* ---------- шкала готовности ---------- */
+  .progress-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px 12px; margin-bottom: 18px; }
+  .pc-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .pc-title { font-weight: 600; color: var(--text-2); font-size: 13px; }
+  .pc-percent { font-size: 22px; font-weight: 700; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; font-variant-numeric: tabular-nums; }
+  .pc-head .ghost-btn { margin-left: auto; }
+  .stages { display: grid; grid-auto-columns: minmax(96px, 1fr); grid-auto-flow: column; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+  .stage { background: none; border: none; padding: 0; text-align: left; min-width: 0; border-radius: 8px; outline: none; }
+  .seg { height: 10px; border-radius: 6px; background: rgba(196, 181, 253, .14); overflow: hidden; position: relative; transition: box-shadow .15s; }
+  /* заливка на всю ширину сегмента и обрезка по проценту — так градиент непрерывен через все этапы */
+  .seg i { position: absolute; inset: 0; background: var(--grad); background-size: var(--grad-size, 100%) 100%; background-position: var(--grad-pos, 0) 0; clip-path: inset(0 calc(100% - var(--fill, 0%)) 0 0 round 6px); }
+  .stage.active .seg { box-shadow: 0 0 0 1px rgba(245, 128, 189, .55), 0 0 12px rgba(236, 72, 153, .45); }
+  .stage.active .seg i::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .45), transparent); animation: shimmer 2.2s infinite; }
+  @keyframes shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+  .stage-label { display: flex; gap: 5px; align-items: baseline; margin-top: 7px; font-size: 12px; color: var(--muted); padding: 2px 4px; border-radius: 6px; }
+  .stage-label .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .stage-label .mk { flex: none; font-size: 11px; }
+  .stage.done .stage-label { color: var(--text-2); }
+  .stage.done .mk { color: var(--ok); }
+  .stage.active .stage-label { color: var(--text); font-weight: 600; }
+  .stage.active .mk { color: var(--pink); }
+  .stage:hover .stage-label, .stage:focus-visible .stage-label { background: rgba(196, 181, 253, .1); color: var(--text); }
+  .stage.selected .stage-label { background: rgba(196, 181, 253, .16); color: var(--text); }
+  .stage.selected .seg { outline: 2px solid var(--violet); outline-offset: 2px; }
+  .stages-empty { color: var(--text-2); font-size: 13px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .stage-detail { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px; }
+  .sd-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .sd-num { color: var(--muted); font-size: 12px; }
+  .sd-title { font-weight: 650; font-size: 15px; }
+  .st-pill { font-size: 11px; font-weight: 600; border-radius: 99px; padding: 1px 8px; }
+  .st-pill.done { background: var(--ok-soft); color: var(--ok); }
+  .st-pill.active { background: var(--pink-soft); color: var(--pink); }
+  .st-pill.todo { background: rgba(196, 181, 253, .12); color: var(--muted); }
+  .sd-actions { margin-left: auto; display: flex; gap: 6px; }
+  .sd-block { margin-top: 10px; }
+  .sd-label { font-size: 11.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
+  .sd-tasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .sd-tasks li { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 8px; background: rgba(8, 8, 24, .35); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; cursor: pointer; }
+  .sd-tasks li:hover { border-color: var(--border-strong); }
+  .sd-tasks time { color: var(--muted); font-size: 12px; }
+  .sd-tasks .q { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sd-tasks .a { color: var(--text-2); font-size: 12.5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .muted { color: var(--muted); }
+
+  /* ---------- лента ---------- */
+  .day { font-size: 12px; color: var(--text-2); font-weight: 600; margin: 20px 2px 8px; text-transform: uppercase; letter-spacing: .07em; text-shadow: 0 1px 6px rgba(0, 0, 0, .7); }
   .task {
-    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 12px 14px; margin-bottom: 10px; position: relative;
+    background: var(--card); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+    border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 10px; position: relative;
+    transition: border-color .15s, box-shadow .3s;
   }
   .task:hover { border-color: var(--border-strong); }
+  .task.flash { box-shadow: 0 0 0 2px var(--violet), 0 0 24px rgba(180, 155, 255, .4); }
   .task-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
-  .chip { background: var(--panel-3); color: var(--text-2); border-radius: 6px; padding: 1px 7px; font-weight: 600; }
+  .task-meta .icon-btn { margin-left: auto; opacity: 0; }
+  .task:hover .task-meta .icon-btn, .task-meta .icon-btn:focus-visible { opacity: 1; }
+  .chip { background: rgba(196, 181, 253, .13); color: var(--text-2); border-radius: 6px; padding: 1px 7px; font-weight: 600; }
   .chip.link { cursor: pointer; }
-  .chip.link:hover { color: var(--text); }
+  .chip.link:hover { color: var(--text); background: rgba(196, 181, 253, .22); }
+  .chip.stage-chip { background: var(--violet-soft); color: var(--violet); }
   .badge { border-radius: 6px; padding: 1px 7px; font-weight: 600; font-size: 11px; }
   .badge.agent { background: var(--accent-soft); color: var(--accent); }
-  .badge.hook { background: var(--blue-soft); color: var(--blue); }
+  .badge.hook { background: var(--sky-soft); color: var(--sky); }
   .sid { font-family: var(--mono); font-size: 11px; cursor: pointer; }
   .sid:hover { color: var(--text-2); }
-  .icon-btn {
-    margin-left: auto; background: none; border: none; color: var(--muted); border-radius: 6px;
-    width: 24px; height: 24px; display: grid; place-items: center; opacity: 0; font-size: 16px; line-height: 1;
-  }
-  .task:hover .icon-btn, .note:hover .icon-btn, .icon-btn:focus-visible { opacity: 1; }
-  .icon-btn:hover { background: var(--panel-3); color: var(--danger); }
-  .field { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 10px; margin-top: 4px; }
-  .field .label { color: var(--muted); font-size: 12px; padding-top: 1px; }
-  .field .text { white-space: pre-wrap; overflow-wrap: anywhere; }
-  .field.req .text { color: var(--text-2); }
-  .clamp { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
-  .clamp.can-expand { cursor: pointer; }
-  .clamp.expanded { display: block; }
-  .more { color: var(--blue); font-size: 12px; cursor: pointer; margin-top: 2px; display: inline-block; }
-  .status-line { margin-top: 8px; font-size: 12.5px; color: #c9d7fb; }
-  .status-line b { color: var(--blue); font-weight: 600; }
+  .field { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 10px; margin-top: 6px; }
+  .field .label { color: var(--muted); font-size: 12px; padding-top: 2px; }
+  .req-text { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-2); }
+  details.pasted { margin: 6px 0; border: 1px solid var(--border); border-radius: 8px; background: rgba(8, 8, 24, .35); white-space: normal; }
+  details.pasted summary { cursor: pointer; padding: 5px 10px; font-size: 12.5px; color: var(--muted); list-style: none; display: flex; gap: 6px; align-items: center; user-select: none; }
+  details.pasted summary::-webkit-details-marker { display: none; }
+  details.pasted summary::before { content: "▸"; transition: transform .15s; }
+  details.pasted[open] summary::before { transform: rotate(90deg); }
+  details.pasted summary .first { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  details.pasted pre { margin: 0; padding: 8px 12px 10px; font-family: var(--mono); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-2); border-top: 1px solid var(--border); }
+  .clp-inner { overflow-wrap: anywhere; }
+  .clp.collapsed .clp-inner { max-height: var(--clp-max); overflow: hidden; -webkit-mask-image: linear-gradient(180deg, #000 65%, transparent); mask-image: linear-gradient(180deg, #000 65%, transparent); }
+  .more { background: none; border: none; padding: 0; color: var(--sky); font-size: 12px; margin-top: 4px; }
+  .more:hover { text-decoration: underline; }
+  .status-line { margin-top: 8px; font-size: 12.5px; color: var(--text-2); }
+  .status-line b { color: var(--sky); font-weight: 600; }
   details.files { margin-top: 8px; }
   details.files summary { cursor: pointer; color: var(--muted); font-size: 12.5px; user-select: none; list-style: none; display: inline-flex; gap: 6px; align-items: center; }
   details.files summary::-webkit-details-marker { display: none; }
   details.files summary::before { content: "▸"; transition: transform .15s; display: inline-block; }
   details.files[open] summary::before { transform: rotate(90deg); }
   details.files summary:hover { color: var(--text-2); }
-  details.files ul { margin: 6px 0 0; padding: 8px 10px; list-style: none; background: var(--bg); border-radius: 8px; border: 1px solid var(--border); }
+  details.files ul { margin: 6px 0 0; padding: 8px 10px; list-style: none; background: rgba(8, 8, 24, .45); border-radius: 8px; border: 1px solid var(--border); }
   details.files li { font-family: var(--mono); font-size: 12px; color: var(--text-2); padding: 1px 0; overflow-wrap: anywhere; }
   details.files li .dir { color: var(--muted); }
-  .empty { color: var(--muted); text-align: center; padding: 60px 20px; border: 1px dashed var(--border); border-radius: var(--radius); }
-  .empty code { font-family: var(--mono); font-size: 12px; background: var(--panel-2); padding: 2px 6px; border-radius: 5px; color: var(--text-2); }
-  .load-more { display: block; margin: 14px auto 0; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 7px 16px; color: var(--text-2); }
-  .load-more:hover { border-color: var(--border-strong); color: var(--text); }
+  .empty { color: var(--text-2); text-align: center; padding: 50px 20px; border: 1px dashed var(--border-strong); border-radius: var(--radius); background: var(--glass); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); }
+  .empty code { font-family: var(--mono); font-size: 12px; background: rgba(196, 181, 253, .12); padding: 2px 6px; border-radius: 5px; }
+  .load-more { display: block; margin: 14px auto 0; }
 
-  /* ---------- notes ---------- */
+  /* ---------- markdown ---------- */
+  .md { overflow-wrap: anywhere; }
+  .md > :first-child { margin-top: 0; }
+  .md > :last-child { margin-bottom: 0; }
+  .md p { margin: 0 0 8px; }
+  .md ul, .md ol { margin: 0 0 8px; padding-left: 22px; }
+  .md li { margin: 2px 0; }
+  .md li > ul, .md li > ol { margin: 2px 0 0; }
+  .md li::marker { color: var(--muted); }
+  .md strong { color: #fff; font-weight: 650; }
+  .md em { color: var(--text); }
+  .md code { font-family: var(--mono); font-size: 12px; background: rgba(196, 181, 253, .14); color: #f6dcff; padding: 1px 5px; border-radius: 5px; }
+  .md .md-pre { background: rgba(6, 6, 20, .6); border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; overflow-x: auto; margin: 0 0 8px; }
+  .md .md-pre code { background: none; padding: 0; color: var(--text-2); white-space: pre; }
+  .md .md-h { font-weight: 650; color: #fff; margin: 12px 0 6px; }
+  .md .md-h1, .md .md-h2 { font-size: 15px; }
+  .md .md-h3, .md .md-h4, .md .md-h5, .md .md-h6 { font-size: 14px; }
+  .md blockquote { margin: 0 0 8px; padding: 2px 12px; border-left: 3px solid var(--violet); color: var(--text-2); }
+  .md hr { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
+  .md .md-table { overflow-x: auto; margin: 2px 0 10px; border: 1px solid var(--border); border-radius: 8px; }
+  .md table { border-collapse: collapse; width: 100%; font-size: 12.8px; }
+  .md th, .md td { padding: 6px 10px; border-bottom: 1px solid var(--border); vertical-align: top; text-align: left; }
+  .md th { background: rgba(196, 181, 253, .1); color: var(--text); font-weight: 600; white-space: nowrap; }
+  .md tr:last-child td { border-bottom: none; }
+  .md tbody tr:nth-child(even) td { background: rgba(196, 181, 253, .04); }
+  .md .md-check { color: var(--muted); }
+  .md .md-check.done { color: var(--ok); }
+  .md del { color: var(--muted); }
+
+  /* ---------- правки ---------- */
   #notes h2 { font-size: 16px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
-  #notes h2 .pill { font-size: 11px; }
-  .composer { background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; margin-bottom: 16px; }
+  .composer { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; margin-bottom: 16px; }
   .composer:focus-within { border-color: var(--border-strong); }
-  .composer input[type=text], .composer textarea {
-    width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; outline: none;
+  .composer input[type=text], .composer textarea, .modal input, .modal textarea, .modal select {
+    width: 100%; background: var(--input); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; outline: none;
   }
-  .composer input[type=text]:focus, .composer textarea:focus { border-color: #4a5264; }
-  .composer textarea { resize: vertical; min-height: 84px; margin-top: 8px; display: block; }
-  .interim { color: var(--muted); font-style: italic; font-size: 12.5px; min-height: 0; margin-top: 4px; }
+  .composer input[type=text]:focus, .composer textarea:focus, .modal input:focus, .modal textarea:focus, .modal select:focus { border-color: rgba(196, 181, 253, .5); }
+  .composer textarea { resize: vertical; min-height: 88px; margin-top: 8px; display: block; }
+  .interim { color: var(--muted); font-style: italic; font-size: 12.5px; margin-top: 4px; }
   .interim:empty { display: none; }
   .attachments { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
   .attachments:empty { display: none; }
-  .thumb { position: relative; width: 72px; height: 72px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); background: var(--bg); }
+  .thumb { position: relative; width: 72px; height: 72px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); background: var(--input); }
   .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; cursor: zoom-in; }
   .thumb .x, .audio-att .x {
     position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; border-radius: 50%; border: none;
     background: rgba(0, 0, 0, .7); color: #fff; font-size: 13px; line-height: 20px; padding: 0;
   }
-  .audio-att { position: relative; display: flex; align-items: center; gap: 6px; width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 4px 30px 4px 6px; }
+  .audio-att { position: relative; display: flex; align-items: center; gap: 6px; width: 100%; background: var(--input); border: 1px solid var(--border); border-radius: 8px; padding: 4px 30px 4px 6px; }
   .audio-att audio { height: 32px; width: 100%; }
   .audio-att .x { top: 50%; transform: translateY(-50%); right: 5px; }
   .composer-actions { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
   .btn {
-    background: var(--panel-3); border: 1px solid var(--border-strong); border-radius: 8px; padding: 6px 11px;
+    background: rgba(196, 181, 253, .1); border: 1px solid var(--border-strong); border-radius: 8px; padding: 6px 11px;
     display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
   }
-  .btn:hover { border-color: #4a5264; }
+  .btn:hover { border-color: rgba(196, 181, 253, .5); }
   .btn:disabled { opacity: .5; cursor: default; }
-  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; margin-left: auto; }
+  .btn.primary { background: var(--grad); border-color: transparent; color: #fff; font-weight: 600; box-shadow: 0 4px 16px rgba(236, 72, 153, .3); }
   .btn.primary:hover { filter: brightness(1.08); }
-  .btn.rec { color: var(--text); }
-  .btn.rec.recording { background: rgba(239, 100, 97, .16); border-color: var(--danger); color: #ffb3b1; }
+  .composer-actions .btn.primary { margin-left: auto; }
+  .btn.rec.recording { background: rgba(255, 123, 144, .16); border-color: var(--danger); color: #ffc1cb; }
   .btn.rec.recording .dot { animation: pulse 1s infinite; }
   .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--danger); display: inline-block; }
   @keyframes pulse { 50% { opacity: .25; } }
-  .timer { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .timer { font-family: var(--mono); font-size: 12px; color: var(--text-2); }
+  .level { display: inline-flex; gap: 2px; align-items: flex-end; height: 16px; }
+  .level i { width: 3px; border-radius: 2px; background: var(--pink); height: 3px; transition: height .08s; }
   .hint { color: var(--muted); font-size: 11.5px; margin-top: 6px; }
-  .hint kbd { font-family: var(--mono); font-size: 10.5px; background: var(--panel-3); border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; }
-  .hint.warn { color: #e5a14b; }
+  .hint kbd { font-family: var(--mono); font-size: 10.5px; background: rgba(196, 181, 253, .12); border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; }
+  .hint.warn { color: #ffcf8a; }
+  .hint .btn { margin-top: 6px; font-size: 12px; padding: 4px 9px; }
 
   .note {
     display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; padding: 10px 10px 10px 8px;
-    border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel-2); margin-bottom: 8px;
+    border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); margin-bottom: 8px;
   }
   .note input[type=checkbox] { width: 16px; height: 16px; margin: 2px 0 0 2px; accent-color: var(--ok); cursor: pointer; }
   .note-text { white-space: pre-wrap; overflow-wrap: anywhere; outline: none; border-radius: 6px; }
-  .note-text[contenteditable=plaintext-only], .note-text[contenteditable=true] { background: var(--bg); box-shadow: 0 0 0 1px #4a5264; padding: 2px 4px; }
+  .note-text[contenteditable=plaintext-only], .note-text[contenteditable=true] { background: var(--input); box-shadow: 0 0 0 1px rgba(196, 181, 253, .5); padding: 2px 4px; }
   .note-text.placeholder { color: var(--muted); font-style: italic; }
   .note audio { width: 100%; height: 32px; margin-top: 6px; display: block; }
   .note .thumbs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   .note .thumbs img { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); cursor: zoom-in; }
-  .note-meta { display: flex; align-items: center; gap: 8px; margin-top: 6px; color: var(--muted); font-size: 11.5px; }
-  .note-meta .icon-btn { width: 22px; height: 22px; font-size: 14px; }
-  .note-meta .edit:hover { color: var(--text); }
-  .note.done { background: transparent; }
-  .note.done .note-text { color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(127, 135, 154, .5); }
+  .note-meta { display: flex; align-items: center; gap: 8px; margin-top: 6px; color: var(--muted); font-size: 11.5px; flex-wrap: wrap; }
+  .note-meta .icon-btn { width: 22px; height: 22px; font-size: 14px; opacity: 0; }
+  .note:hover .note-meta .icon-btn, .note-meta .icon-btn:focus-visible { opacity: 1; }
+  .note-meta .push { margin-left: auto; }
+  .note.done { background: rgba(14, 15, 38, .4); }
+  .note.done .note-text { color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(163, 157, 198, .5); }
+  .by { border-radius: 6px; padding: 1px 7px; font-weight: 600; font-size: 11px; display: inline-flex; gap: 4px; align-items: center; }
+  .by.claude { background: var(--accent-soft); color: var(--accent); }
+  .by.user { background: var(--ok-soft); color: var(--ok); }
+  .by.unknown { background: rgba(196, 181, 253, .12); color: var(--muted); }
   details.done-list summary { cursor: pointer; color: var(--muted); font-size: 12.5px; margin: 14px 0 8px; user-select: none; }
   .notes-empty { color: var(--muted); font-size: 12.5px; padding: 6px 2px; }
 
-  /* ---------- overlays ---------- */
-  #drop {
-    position: fixed; inset: 0; background: rgba(14, 16, 20, .82); border: 3px dashed var(--accent);
-    display: none; place-items: center; z-index: 50; font-size: 18px; color: var(--text); pointer-events: none;
-  }
+  /* ---------- оверлеи ---------- */
+  #drop { position: fixed; inset: 0; background: rgba(10, 11, 30, .82); border: 3px dashed var(--pink); display: none; place-items: center; z-index: 50; font-size: 18px; pointer-events: none; }
   #drop.show { display: grid; }
   #lightbox { position: fixed; inset: 0; background: rgba(0, 0, 0, .88); display: none; place-items: center; z-index: 60; cursor: zoom-out; padding: 24px; }
   #lightbox.show { display: grid; }
   #lightbox img { max-width: 100%; max-height: 100%; border-radius: 6px; box-shadow: 0 10px 40px rgba(0, 0, 0, .6); }
   #toast {
-    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0;
-    background: var(--panel-3); border: 1px solid var(--border-strong); border-radius: 8px; padding: 8px 14px;
-    transition: .2s; z-index: 70; pointer-events: none; font-size: 13px;
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0; max-width: min(560px, calc(100vw - 32px));
+    background: var(--glass-strong); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+    border: 1px solid var(--border-strong); border-radius: 10px; padding: 8px 14px; transition: .2s; z-index: 70; pointer-events: none; font-size: 13px;
   }
   #toast.show { opacity: 1; transform: translateX(-50%); }
-  #toast.error { border-color: var(--danger); color: #ffc2c0; }
+  #toast.error { border-color: var(--danger); color: #ffd0d7; }
+  dialog.modal {
+    width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; color: var(--text);
+    background: var(--glass-strong); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+    border: 1px solid var(--border-strong); border-radius: 14px; box-shadow: 0 20px 60px rgba(0, 0, 0, .6);
+  }
+  dialog.modal::backdrop { background: rgba(5, 5, 18, .6); }
+  .modal-body { padding: 18px 18px 0; overflow-y: auto; max-height: calc(100vh - 140px); }
+  .modal h3 { margin: 0 0 4px; font-size: 16px; }
+  .modal .sub { color: var(--muted); font-size: 12.5px; margin-bottom: 12px; }
+  .se-row { display: grid; grid-template-columns: 128px minmax(0, 1fr) auto; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; background: rgba(8, 8, 24, .3); }
+  .se-row textarea { grid-column: 2 / 3; resize: vertical; min-height: 38px; font-size: 13px; }
+  .se-row .se-tools { grid-row: 1 / 3; grid-column: 3; display: flex; flex-direction: column; gap: 2px; }
+  .se-progress { display: flex; align-items: center; gap: 8px; margin: 12px 0 4px; color: var(--text-2); font-size: 13px; }
+  .se-progress input { width: 90px !important; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; padding: 14px 18px 18px; }
 
-  /* ---------- responsive ---------- */
-  @media (max-width: 1180px) {
-    .layout { grid-template-columns: 230px minmax(0, 1fr); }
+  /* ---------- адаптив ---------- */
+  @media (max-width: 1220px) {
+    .layout { grid-template-columns: 240px minmax(0, 1fr); }
     .main-col { display: block; overflow-y: auto; min-height: 0; }
     #feed, #notes { overflow: visible; }
     #notes { border-left: none; border-top: 1px solid var(--border); }
@@ -218,29 +365,40 @@
   @media (max-width: 760px) {
     body { overflow: auto; display: block; }
     .layout { display: block; }
-    aside { border-right: none; border-bottom: 1px solid var(--border); display: flex; gap: 6px; overflow-x: auto; padding: 8px; }
-    aside .section-title { display: none; }
-    .proj { width: auto; min-width: 150px; max-width: 220px; flex: none; }
-    #feed { padding: 14px; }
+    aside { border-right: none; border-bottom: 1px solid var(--border); display: flex; gap: 6px; overflow-x: auto; padding: 8px; align-items: flex-start; }
+    aside > .section-title { display: none; }
+    aside details.archive { flex: none; min-width: 160px; }
+    aside details.archive > summary { margin: 8px 6px; }
+    .proj { width: auto; min-width: 160px; max-width: 220px; flex: none; }
+    .proj-actions { display: flex; position: static; margin-top: 6px; width: max-content; }
+    #feed { padding: 14px 16px; }
+    #notes { padding: 14px 16px; }
     .main-col { overflow: visible; }
-    #notes { padding: 14px; }
-    .field { grid-template-columns: 1fr; gap: 0; }
-    .icon-btn { opacity: 1; }
+    .field { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    .task-meta .icon-btn, .note-meta .icon-btn { opacity: 1; }
+    .head-actions { margin-left: 0; width: 100%; }
+    .se-row { grid-template-columns: 1fr auto; }
+    .se-row select { grid-column: 1; }
+    .se-row input { grid-column: 1; }
+    .se-row textarea { grid-column: 1; }
+    .se-row .se-tools { grid-row: 1 / 4; grid-column: 2; }
   }
 </style>
 </head>
 <body>
-<header>
+<div class="bg-wrap" aria-hidden="true"><div class="bg"></div><div class="bg-shade"></div></div>
+
+<header class="glass">
   <div class="logo">A</div>
   <h1>Agent Dashboard</h1>
   <div class="live" id="live" title="Живые обновления с сервера"><i></i><span>нет связи</span></div>
 </header>
 
 <div class="layout">
-  <aside id="projects" aria-label="Проекты"></aside>
+  <aside id="projects" class="glass" aria-label="Проекты"></aside>
   <div class="main-col">
     <section id="feed" aria-label="Лента задач"></section>
-    <section id="notes" aria-label="Правки">
+    <section id="notes" class="glass" aria-label="Правки">
       <h2>Правки <span class="pill notes" id="notes-count" hidden></span></h2>
       <form class="composer" id="composer" autocomplete="off">
         <input type="text" id="note-project" list="project-names" placeholder="Проект" required aria-label="Проект">
@@ -251,10 +409,11 @@
         <div class="composer-actions">
           <button type="button" class="btn rec" id="rec-btn" title="Запись голоса с расшифровкой"><span class="dot"></span><span id="rec-label">Голос</span></button>
           <span class="timer" id="rec-timer" hidden>0:00</span>
+          <span class="level" id="rec-level" hidden><i></i><i></i><i></i><i></i><i></i></span>
           <label class="btn" title="Прикрепить картинки">📎<input type="file" id="file-input" accept="image/*" multiple hidden></label>
           <button type="submit" class="btn primary" id="submit-btn">Добавить</button>
         </div>
-        <div class="hint" id="composer-hint"><kbd>Ctrl</kbd>+<kbd>V</kbd> — вставить скриншот · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> — добавить</div>
+        <div class="hint" id="composer-hint"></div>
       </form>
       <div id="notes-open"></div>
       <details class="done-list" id="notes-done-wrap" hidden>
@@ -265,12 +424,211 @@
   </div>
 </div>
 
+<dialog class="modal" id="stage-editor">
+  <form method="dialog" id="stage-form">
+    <div class="modal-body">
+      <h3 id="se-title">Этапы проекта</h3>
+      <div class="sub">Этапы показываются на шкале готовности. Claude видит их в начале сессии и привязывает к ним задачи.</div>
+      <div id="se-rows"></div>
+      <button type="button" class="btn" id="se-add">+ Добавить этап</button>
+      <label class="se-progress">Готовность проекта:
+        <input type="number" id="se-progress" min="0" max="100" placeholder="авто"> %
+        <span class="muted">— пусто: считать по этапам</span>
+      </label>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn" id="se-cancel">Отмена</button>
+      <button type="submit" class="btn primary" id="se-save">Сохранить</button>
+    </div>
+  </form>
+</dialog>
+
 <div id="drop">Отпустите, чтобы прикрепить к правке</div>
 <div id="lightbox"><img alt=""></div>
 <div id="toast" role="status"></div>
 
 <script>
 'use strict';
+
+/* markdown:start — безопасный рендер Markdown: весь текст экранируется, ссылки только http(s)/mailto */
+const Markdown = (() => {
+  const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+  const UNESC = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'" };
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ESC[c]);
+  const unesc = (s) => s.replace(/&(amp|lt|gt|quot|#39);/g, (m, e) => UNESC[e]);
+  const SAFE_URL = /^(https?:\/\/|mailto:)/i;
+  const link = (href, label) => `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+
+  function inline(text) {
+    const slots = [];
+    const hold = (html) => `\u0000${slots.push(html) - 1}\u0000`;
+    let s = String(text);
+    s = s.replace(/``(.+?)``/g, (m, c) => hold(`<code>${esc(c.trim())}</code>`));
+    s = s.replace(/`([^`\n]+?)`/g, (m, c) => hold(`<code>${esc(c)}</code>`));
+    s = esc(s);
+    s = s.replace(/\[([^\]\n]+)\]\(\s*([^)\s]+)\s*\)/g, (m, label, url) => {
+      const u = unesc(url);
+      return SAFE_URL.test(u) ? hold(link(u, label)) : m;
+    });
+    s = s.replace(/\bhttps?:\/\/[^\s<>()\u0000]*[^\s<>()\u0000.,;:!?'"»]/g, (u) => {
+      const clean = u.replace(/&quot;.*$/, '');
+      return hold(link(unesc(clean), clean)) + u.slice(clean.length);
+    });
+    s = s.replace(/\*\*(?=\S)([^\n]*?\S)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/(^|[^\w])__(?=\S)([^\n]*?\S)__(?!\w)/g, '$1<strong>$2</strong>');
+    s = s.replace(/(^|[^*\w])\*(?=[^\s*])([^*\n]*?[^\s*])\*(?![*\w])/g, '$1<em>$2</em>');
+    s = s.replace(/(^|[^\w])_(?=[^\s_])([^_\n]*?[^\s_])_(?!\w)/g, '$1<em>$2</em>');
+    s = s.replace(/~~(?=\S)([^\n]*?\S)~~/g, '<del>$1</del>');
+    for (let guard = 0; s.includes('\u0000') && guard < 5; guard++) {
+      s = s.replace(/\u0000(\d+)\u0000/g, (m, i) => slots[+i]);
+    }
+    return s;
+  }
+
+  const RE = {
+    fence: /^\s{0,3}(`{3,}|~{3,})\s*[^`]*$/,
+    heading: /^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$/,
+    hr: /^\s{0,3}([-*_])(?:\s*\1){2,}\s*$/,
+    list: /^(\s*)([-*+]|\d{1,9}[.)])\s+(.*)$/,
+    quote: /^\s{0,3}>\s?(.*)$/,
+    tableSep: /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/,
+  };
+  const isTableStart = (lines, i) => lines[i].includes('|') && i + 1 < lines.length
+    && lines[i + 1].includes('|') && lines[i + 1].includes('-') && RE.tableSep.test(lines[i + 1]);
+  const startsBlock = (lines, i) => {
+    const l = lines[i];
+    return RE.fence.test(l) || RE.heading.test(l) || RE.hr.test(l) || RE.list.test(l) || RE.quote.test(l) || isTableStart(lines, i);
+  };
+
+  function splitRow(line) {
+    let s = line.trim();
+    if (s.startsWith('|')) s = s.slice(1);
+    if (s.endsWith('|') && !s.endsWith('\\|')) s = s.slice(0, -1);
+    const cells = [];
+    let cur = '';
+    let inCode = false;
+    for (let k = 0; k < s.length; k++) {
+      const ch = s[k];
+      if (ch === '\\' && s[k + 1] === '|') { cur += '|'; k++; continue; }
+      if (ch === '`') inCode = !inCode;
+      if (ch === '|' && !inCode) { cells.push(cur.trim()); cur = ''; continue; }
+      cur += ch;
+    }
+    cells.push(cur.trim());
+    return cells;
+  }
+
+  function table(lines, i) {
+    const head = splitRow(lines[i]);
+    const aligns = splitRow(lines[i + 1]).map((c) => (/^:-+:$/.test(c) ? 'center' : /-:$/.test(c) ? 'right' : ''));
+    let j = i + 2;
+    const rows = [];
+    while (j < lines.length && lines[j].trim() && lines[j].includes('|')) rows.push(splitRow(lines[j++]));
+    const cell = (tag, c, k) => `<${tag}${aligns[k] ? ` style="text-align:${aligns[k]}"` : ''}>${inline(c)}</${tag}>`;
+    const html = `<div class="md-table"><table><thead><tr>${head.map((c, k) => cell('th', c, k)).join('')}</tr></thead>`
+      + `<tbody>${rows.map((r) => `<tr>${head.map((_, k) => cell('td', r[k] || '', k)).join('')}</tr>`).join('')}</tbody></table></div>`;
+    return { html, next: j };
+  }
+
+  function itemContent(text) {
+    let box = '';
+    const m = text.match(/^\[([ xX])\]\s+/);
+    if (m) {
+      box = m[1] === ' ' ? '<span class="md-check">☐</span> ' : '<span class="md-check done">☑</span> ';
+      text = text.slice(m[0].length);
+    }
+    return box + text.split('\n').map(inline).join('<br>');
+  }
+
+  function buildList(items) {
+    let html = '';
+    const stack = [];
+    const open = (it) => `<${it.ordered ? 'ol' : 'ul'}${it.ordered && it.start > 1 ? ` start="${it.start}"` : ''}>`;
+    for (const it of items) {
+      const tag = it.ordered ? 'ol' : 'ul';
+      while (stack.length > 1 && it.indent < stack[stack.length - 1].indent) html += `</li></${stack.pop().tag}>`;
+      const top = stack[stack.length - 1];
+      if (!top || it.indent > top.indent + 1) {
+        html += open(it);
+        stack.push({ indent: it.indent, tag });
+      } else if (top.tag !== tag) {
+        html += `</li></${top.tag}>${open(it)}`;
+        top.tag = tag;
+      } else {
+        html += '</li>';
+      }
+      html += `<li>${itemContent(it.text)}`;
+    }
+    while (stack.length) html += `</li></${stack.pop().tag}>`;
+    return html;
+  }
+
+  function list(lines, i) {
+    const items = [];
+    while (i < lines.length) {
+      const line = lines[i];
+      const m = line.match(RE.list);
+      if (m && !RE.hr.test(line)) {
+        items.push({ indent: m[1].replace(/\t/g, '    ').length, ordered: /\d/.test(m[2]), start: parseInt(m[2], 10), text: m[3] });
+        i++;
+        continue;
+      }
+      if (!line.trim()) {
+        let j = i + 1;
+        while (j < lines.length && !lines[j].trim()) j++;
+        if (j < lines.length && (RE.list.test(lines[j]) || /^\s{2,}\S/.test(lines[j])) && !RE.hr.test(lines[j])) { i = j; continue; }
+        break;
+      }
+      if (items.length && (/^\s{2,}\S/.test(line) || !startsBlock(lines, i))) {
+        items[items.length - 1].text += '\n' + line.trim();
+        i++;
+        continue;
+      }
+      break;
+    }
+    return { html: buildList(items), next: i };
+  }
+
+  function blocks(lines) {
+    const out = [];
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i];
+      if (!line.trim()) { i++; continue; }
+      let m = line.match(RE.fence);
+      if (m) {
+        const close = new RegExp(`^\\s{0,3}${m[1][0] === '`' ? '`' : '~'}{${m[1].length},}\\s*$`);
+        const buf = [];
+        i++;
+        while (i < lines.length && !close.test(lines[i])) buf.push(lines[i++]);
+        i++;
+        out.push(`<pre class="md-pre"><code>${esc(buf.join('\n'))}</code></pre>`);
+        continue;
+      }
+      if ((m = line.match(RE.heading))) { out.push(`<div class="md-h md-h${m[1].length}">${inline(m[2])}</div>`); i++; continue; }
+      if (RE.hr.test(line)) { out.push('<hr>'); i++; continue; }
+      if (isTableStart(lines, i)) { const t = table(lines, i); out.push(t.html); i = t.next; continue; }
+      if (RE.quote.test(line)) {
+        const buf = [];
+        while (i < lines.length && RE.quote.test(lines[i])) buf.push(lines[i++].match(RE.quote)[1]);
+        out.push(`<blockquote>${blocks(buf)}</blockquote>`);
+        continue;
+      }
+      if (RE.list.test(line)) { const l = list(lines, i); out.push(l.html); i = l.next; continue; }
+      const buf = [];
+      while (i < lines.length && lines[i].trim() && !(buf.length && startsBlock(lines, i))) buf.push(lines[i++].trim());
+      out.push(`<p>${buf.map(inline).join('<br>')}</p>`);
+    }
+    return out.join('');
+  }
+
+  return {
+    render: (src) => blocks(String(src == null ? '' : src).replace(/\u0000/g, '').replace(/\r\n?/g, '\n').split('\n')),
+    inline,
+    esc,
+  };
+})();
+/* markdown:end */
 
 // ============ утилиты ============
 const $ = (sel) => document.querySelector(sel);
@@ -281,15 +639,34 @@ function el(tag, attrs, ...children) {
     if (v === undefined || v === null || v === false) continue;
     if (k === 'class') node.className = v;
     else if (k === 'text') node.textContent = v;
+    else if (k === 'html') node.innerHTML = v;
     else if (k.startsWith('on')) node.addEventListener(k.slice(2), v);
     else if (k === 'dataset') Object.assign(node.dataset, v);
+    else if (k === 'style' && typeof v === 'object') Object.assign(node.style, v);
     else node.setAttribute(k, v === true ? '' : v);
   }
   for (const c of children.flat()) {
-    if (c === undefined || c === null || c === false) continue;
+    if (c === undefined || c === null || c === false || c === '') continue;
     node.append(c instanceof Node ? c : document.createTextNode(String(c)));
   }
   return node;
+}
+
+// Иконки — статичная разметка, пользовательские данные сюда не попадают
+const ICONS = {
+  pin: '<path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1z"/>',
+  archive: '<rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>',
+  unarchive: '<rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="m9 15 3-3 3 3"/><path d="M12 12v6"/>',
+  edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+  chevron: '<path d="m9 18 6-6-6-6"/>',
+  up: '<path d="m18 15-6-6-6 6"/>',
+  down: '<path d="m6 9 6 6 6-6"/>',
+  close: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+};
+function icon(name, cls = '') {
+  const span = document.createElement('span');
+  span.innerHTML = `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
+  return span.firstChild;
 }
 
 async function api(path, opts = {}) {
@@ -299,6 +676,8 @@ async function api(path, opts = {}) {
   if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
   return body;
 }
+const jsonBody = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+const projectUrl = (name, rest = '') => `/api/projects/${encodeURIComponent(name)}${rest}`;
 
 let toastTimer;
 function toast(msg, isError) {
@@ -306,8 +685,13 @@ function toast(msg, isError) {
   t.textContent = msg;
   t.className = 'show' + (isError ? ' error' : '');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { t.className = ''; }, isError ? 4500 : 2200);
+  toastTimer = setTimeout(() => { t.className = ''; }, isError ? 6000 : 2400);
 }
+
+const storage = {
+  get(key, fallback) { try { const v = localStorage.getItem(key); return v === null ? fallback : v; } catch { return fallback; } },
+  set(key, value) { try { localStorage.setItem(key, value); } catch { /* storage недоступен */ } },
+};
 
 const rtf = new Intl.RelativeTimeFormat('ru', { numeric: 'auto' });
 function relTime(iso) {
@@ -322,6 +706,7 @@ function relTime(iso) {
 }
 const fullTime = (iso) => new Date(iso).toLocaleString('ru-RU', { dateStyle: 'long', timeStyle: 'short' });
 const clockTime = (iso) => new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+const shortDate = (iso) => new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
 function dayLabel(iso) {
   const d = new Date(iso);
   const start = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
@@ -332,7 +717,8 @@ function dayLabel(iso) {
   return d.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'long', ...(sameYear ? {} : { year: 'numeric' }) });
 }
 function timeEl(iso, fmt) {
-  return el('time', { datetime: iso, title: fullTime(iso), dataset: { fmt } }, fmt === 'clock' ? clockTime(iso) : relTime(iso));
+  const text = fmt === 'clock' ? clockTime(iso) : fmt === 'date' ? shortDate(iso) : relTime(iso);
+  return el('time', { datetime: iso, title: fullTime(iso), dataset: { fmt } }, text);
 }
 function refreshRelativeTimes() {
   document.querySelectorAll('time[data-fmt=rel]').forEach((t) => { t.textContent = relTime(t.getAttribute('datetime')); });
@@ -341,36 +727,98 @@ const plural = (n, one, few, many) => {
   const m10 = n % 10, m100 = n % 100;
   return m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many;
 };
+const firstLine = (s, max = 140) => {
+  const line = String(s || '').replace(/<pasted_content\b[^>]*>[\s\S]*?(<\/pasted_content\b[^>]*>|$)/g, ' ')
+    .replace(/[*_`#>|]/g, '').split('\n').map((x) => x.trim()).find(Boolean) || '';
+  return line.length > max ? line.slice(0, max - 1) + '…' : line;
+};
+
+// Длинный блок сворачивается с плавным затуханием; раскрытые блоки помним между перерисовками
+const expanded = new Set();
+function collapsible(content, maxPx, key) {
+  const inner = el('div', { class: 'clp-inner' }, content);
+  const box = el('div', { class: 'clp' }, inner);
+  box.style.setProperty('--clp-max', maxPx + 'px');
+  const wrap = el('div', {}, box);
+  requestAnimationFrame(() => {
+    if (inner.scrollHeight <= maxPx + 30) return;
+    const isOpen = key && expanded.has(key);
+    box.classList.toggle('collapsed', !isOpen);
+    const btn = el('button', { class: 'more', type: 'button' }, isOpen ? 'Свернуть' : 'Показать полностью');
+    btn.addEventListener('click', () => {
+      const collapsed = box.classList.toggle('collapsed');
+      btn.textContent = collapsed ? 'Показать полностью' : 'Свернуть';
+      if (key) { if (collapsed) expanded.delete(key); else expanded.add(key); }
+    });
+    wrap.append(btn);
+  });
+  return wrap;
+}
+
+function markdownNode(text) {
+  return el('div', { class: 'md', html: Markdown.render(text) });
+}
+
+// Запрос пользователя: обычный текст, а блоки <pasted_content> — сворачиваемые вставки
+function requestNode(text) {
+  const box = el('div', { class: 'req-text' });
+  const re = /<pasted_content\b[^>]*>([\s\S]*?)(?:<\/pasted_content\b[^>]*>|$)/g;
+  let last = 0;
+  let m;
+  while ((m = re.exec(text)) && m[0].length) {
+    const before = text.slice(last, m.index).replace(/^\n+|\s+$/g, '');
+    if (before) box.append(el('span', {}, before));
+    const body = m[1].replace(/^\n+|\s+$/g, '');
+    const lines = body ? body.split('\n').length : 0;
+    box.append(el('details', { class: 'pasted' },
+      el('summary', {}, `Вставленный текст · ${lines} ${plural(lines, 'строка', 'строки', 'строк')}`,
+        el('span', { class: 'first' }, firstLine(body, 70) ? `— ${firstLine(body, 70)}` : '')),
+      el('pre', {}, body),
+    ));
+    last = re.lastIndex;
+  }
+  const rest = text.slice(last).replace(/^\n+/, '');
+  if (rest) box.append(el('span', {}, rest));
+  return box;
+}
 
 // ============ состояние ============
 const PAGE = 50;
 const state = {
-  project: '',       // '' — все проекты
+  project: '',        // '' — все проекты
   projects: [],
+  detail: null,       // подробности выбранного проекта (этапы)
+  detailLoading: false,
+  stageId: null,      // открытый на шкале этап
   tasks: [],
   hasMore: false,
   notes: [],
 };
+const projectByName = (name) => state.projects.find((p) => p.name === name);
 
 function readHash() {
   const m = location.hash.match(/^#p=(.*)$/);
   return m ? decodeURIComponent(m[1]) : '';
 }
-function selectProject(name) {
+function selectProject(name, { stageId = null } = {}) {
   const hash = name ? '#p=' + encodeURIComponent(name) : '';
   if (location.hash !== hash) history.pushState(null, '', hash || location.pathname);
-  applyProject(name);
+  applyProject(name, stageId);
 }
 function defaultNoteProject() {
-  let last = '';
-  try { last = localStorage.getItem('lastNoteProject') || ''; } catch { /* storage недоступен */ }
-  return state.project || last || (state.projects[0] && state.projects[0].name) || '';
+  const last = storage.get('lastNoteProject', '');
+  const lastP = last && projectByName(last);
+  const firstActive = state.projects.find((p) => !p.archived);
+  return state.project || (lastP && !lastP.archived ? last : '') || (firstActive && firstActive.name) || last || '';
 }
-function applyProject(name) {
-  if (name !== state.project) state.tasks = [];
+function applyProject(name, stageId = null) {
+  if (name !== state.project) { state.tasks = []; state.detail = null; state.detailLoading = !!name; }
   state.project = name;
+  state.stageId = stageId;
   if (name || !$('#note-project').value) $('#note-project').value = defaultNoteProject();
   renderProjects();
+  renderFeed();
+  loadDetail();
   loadTasks();
   loadNotes();
 }
@@ -382,9 +830,22 @@ async function loadProjects() {
     state.projects = await api('/api/projects');
   } catch (e) { return toast('Не удалось загрузить проекты: ' + e.message, true); }
   renderProjects();
-  const dl = $('#project-names');
-  dl.replaceChildren(...state.projects.map((p) => el('option', { value: p.name })));
+  const names = [...state.projects].sort((a, b) => a.archived - b.archived).map((p) => p.name);
+  $('#project-names').replaceChildren(...names.map((n) => el('option', { value: n })));
   if (!$('#note-project').value) $('#note-project').value = defaultNoteProject();
+}
+
+let detailReq = 0;
+async function loadDetail() {
+  const req = ++detailReq;
+  if (!state.project) { state.detail = null; state.detailLoading = false; return; }
+  let detail = null;
+  try { detail = await api(projectUrl(state.project)); } catch { /* новый проект без записей */ }
+  if (req !== detailReq) return;
+  state.detail = detail;
+  state.detailLoading = false;
+  if (state.stageId && !(detail && detail.stages.some((s) => s.id === state.stageId))) state.stageId = null;
+  renderFeed();
 }
 
 let tasksReq = 0;
@@ -392,11 +853,12 @@ async function loadTasks({ append = false } = {}) {
   const req = ++tasksReq;
   const params = new URLSearchParams();
   if (state.project) params.set('project', state.project);
+  else params.set('hide_archived', '1');
   if (append && state.tasks.length) {
     params.set('before', state.tasks[state.tasks.length - 1].id);
     params.set('limit', PAGE);
   } else {
-    params.set('limit', Math.max(PAGE, state.tasks.length));
+    params.set('limit', Math.min(500, Math.max(PAGE, state.tasks.length)));
   }
   let rows;
   try { rows = await api('/api/tasks?' + params); } catch (e) { return toast('Не удалось загрузить задачи: ' + e.message, true); }
@@ -411,6 +873,7 @@ async function loadNotes() {
   const req = ++notesReq;
   const params = new URLSearchParams();
   if (state.project) params.set('project', state.project);
+  else params.set('hide_archived', '1');
   let rows;
   try { rows = await api('/api/notes?' + params); } catch (e) { return toast('Не удалось загрузить правки: ' + e.message, true); }
   if (req !== notesReq) return;
@@ -418,33 +881,233 @@ async function loadNotes() {
   renderNotes();
 }
 
-// ============ проекты ============
-function renderProjects() {
-  const box = $('#projects');
-  const totalTasks = state.projects.reduce((s, p) => s + p.tasks, 0);
-  const totalNotes = state.projects.reduce((s, p) => s + p.open_notes, 0);
-  const item = (name, title, p) => el('button', {
-    class: 'proj' + (state.project === name ? ' active' : ''), type: 'button',
-    onclick: () => selectProject(name),
+// ============ проекты: закрепить / в архив ============
+async function updateProject(name, patch, okText) {
+  try {
+    await api(projectUrl(name), jsonBody('PATCH', patch));
+    if (okText) toast(okText);
+    await loadProjects();
+    if (!state.project) { loadTasks(); loadNotes(); } else if (state.project === name) { loadDetail(); }
+  } catch (e) { toast(e.message, true); }
+}
+const togglePin = (p) => updateProject(p.name, { pinned: !p.pinned }, p.pinned ? `«${p.name}» откреплён` : `«${p.name}» закреплён`);
+const toggleArchive = (p) => updateProject(p.name, { archived: !p.archived },
+  p.archived ? `«${p.name}» возвращён из архива` : `«${p.name}» перенесён в архив — вернётся сам, когда появится новая задача`);
+
+function projectItem(p) {
+  const actions = el('div', { class: 'proj-actions' },
+    !p.archived && el('button', {
+      class: 'icon-btn' + (p.pinned ? ' on' : ''), type: 'button', title: p.pinned ? 'Открепить' : 'Закрепить сверху',
+      'aria-label': p.pinned ? 'Открепить' : 'Закрепить',
+      onclick: (e) => { e.stopPropagation(); togglePin(p); },
+    }, icon('pin')),
+    el('button', {
+      class: 'icon-btn', type: 'button', title: p.archived ? 'Вернуть из архива' : 'В архив',
+      'aria-label': p.archived ? 'Вернуть из архива' : 'В архив',
+      onclick: (e) => { e.stopPropagation(); toggleArchive(p); },
+    }, icon(p.archived ? 'unarchive' : 'archive')),
+  );
+  return el('div', {
+    class: 'proj' + (state.project === p.name ? ' active' : '') + (p.archived ? ' archived' : ''),
+    role: 'button', tabindex: '0', dataset: { name: p.name },
+    onclick: () => selectProject(p.name),
+    onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectProject(p.name); } },
   },
     el('div', { class: 'proj-row' },
-      el('span', { class: 'proj-name', title }, title),
-      (p ? p.open_notes : totalNotes) > 0 && el('span', { class: 'pill notes', title: 'Открытые правки' }, '✎ ' + (p ? p.open_notes : totalNotes)),
+      el('span', { class: 'proj-name', title: p.name }, p.name, p.pinned && !p.archived ? icon('pin', 'pin-mark') : null),
+      p.open_notes > 0 && el('span', { class: 'pill notes', title: 'Открытые правки' }, '✎ ' + p.open_notes),
     ),
-    p && p.status && el('div', { class: 'proj-status', title: p.status }, p.status),
+    p.progress !== null && p.progress !== undefined && el('div', { class: 'mini', title: `Готовность ${p.progress}%` },
+      el('div', { class: 'mini-bar' }, el('i', { style: { width: p.progress + '%' } })),
+      el('span', {}, p.progress + '%'),
+    ),
+    p.status && !p.archived && el('div', { class: 'proj-status', title: p.status }, p.status),
     el('div', { class: 'proj-meta' },
-      p ? `${p.tasks} ${plural(p.tasks, 'задача', 'задачи', 'задач')}` : `${state.projects.length} ${plural(state.projects.length, 'проект', 'проекта', 'проектов')} · ${totalTasks} ${plural(totalTasks, 'задача', 'задачи', 'задач')}`,
-      p && p.last_activity ? ' · ' : '',
-      p && p.last_activity ? timeEl(p.last_activity, 'rel') : '',
+      `${p.tasks} ${plural(p.tasks, 'задача', 'задачи', 'задач')}`,
+      p.last_activity ? ' · ' : '',
+      p.last_activity ? timeEl(p.last_activity, 'rel') : '',
+    ),
+    actions,
+  );
+}
+
+function renderProjects() {
+  const box = $('#projects');
+  const active = state.projects.filter((p) => !p.archived);
+  const pinned = active.filter((p) => p.pinned);
+  const regular = active.filter((p) => !p.pinned);
+  const archived = state.projects.filter((p) => p.archived);
+  const totalTasks = active.reduce((s, p) => s + p.tasks, 0);
+  const totalNotes = active.reduce((s, p) => s + p.open_notes, 0);
+
+  const all = el('div', {
+    class: 'proj' + (state.project === '' ? ' active' : ''), role: 'button', tabindex: '0',
+    onclick: () => selectProject(''),
+    onkeydown: (e) => { if (e.key === 'Enter') selectProject(''); },
+  },
+    el('div', { class: 'proj-row' },
+      el('span', { class: 'proj-name' }, 'Все проекты'),
+      totalNotes > 0 && el('span', { class: 'pill notes', title: 'Открытые правки' }, '✎ ' + totalNotes),
+    ),
+    el('div', { class: 'proj-meta' },
+      `${active.length} ${plural(active.length, 'проект', 'проекта', 'проектов')} · ${totalTasks} ${plural(totalTasks, 'задача', 'задачи', 'задач')}`),
+  );
+
+  const nodes = [el('div', { class: 'section-title' }, 'Обзор'), all];
+  if (pinned.length) nodes.push(el('div', { class: 'section-title' }, icon('pin'), 'Закреплённые'), ...pinned.map(projectItem));
+  if (regular.length) nodes.push(el('div', { class: 'section-title' }, 'Проекты'), ...regular.map(projectItem));
+  if (!state.projects.length) nodes.push(el('div', { class: 'empty-side' }, 'Проекты появятся после первой задачи или правки.'));
+  if (archived.length) {
+    // запоминаем только ручное раскрытие (click срабатывает до переключения open)
+    const det = el('details', { class: 'archive' },
+      el('summary', { class: 'section-title', onclick: () => storage.set('archiveOpen', det.open ? '0' : '1') },
+        icon('chevron', 'chev'), `Архив · ${archived.length}`),
+      ...archived.map(projectItem));
+    // выбранный архивный проект держим раскрытым
+    if (storage.get('archiveOpen', '0') === '1' || archived.some((p) => p.name === state.project)) det.open = true;
+    nodes.push(det);
+  }
+  box.replaceChildren(...nodes);
+}
+
+// ============ шкала готовности и этапы ============
+const STAGE_MARK = { done: '✓', active: '▶', todo: '○' };
+const STAGE_WORD = { done: 'завершён', active: 'в работе', todo: 'впереди' };
+
+function setStageStatus(stage, status) {
+  return api(projectUrl(state.project, `/stages/${stage.id}`), jsonBody('PATCH', { status }))
+    .then(() => { toast(`Этап «${stage.title}»: ${STAGE_WORD[status]}`); loadDetail(); loadProjects(); })
+    .catch((e) => toast(e.message, true));
+}
+
+function stageDetail(stage, index, total) {
+  const tasks = stage.tasks || [];
+  const actions = el('div', { class: 'sd-actions' },
+    stage.status !== 'done' && el('button', { class: 'ghost-btn', type: 'button', onclick: () => setStageStatus(stage, 'done') }, '✓ Завершить'),
+    stage.status !== 'active' && el('button', { class: 'ghost-btn', type: 'button', onclick: () => setStageStatus(stage, 'active') }, '▶ В работу'),
+    stage.status === 'active' && el('button', { class: 'ghost-btn', type: 'button', onclick: () => setStageStatus(stage, 'todo') }, '○ Отложить'),
+    el('button', { class: 'icon-btn', type: 'button', title: 'Закрыть', onclick: () => { state.stageId = null; renderFeed(); } }, icon('close')),
+  );
+  return el('div', { class: 'stage-detail', id: 'stage-detail' },
+    el('div', { class: 'sd-head' },
+      el('span', { class: 'sd-num' }, `Этап ${index + 1} из ${total}`),
+      el('span', { class: 'sd-title' }, stage.title),
+      el('span', { class: 'st-pill ' + stage.status }, STAGE_WORD[stage.status]),
+      stage.completed_at && el('span', { class: 'muted', style: { fontSize: '12px' } }, 'завершён ', timeEl(stage.completed_at, 'date')),
+      actions,
+    ),
+    el('div', { class: 'sd-block' },
+      el('div', { class: 'sd-label' }, 'Задачи этапа'),
+      stage.description ? markdownNode(stage.description) : el('div', { class: 'muted' }, 'Описание не задано — его добавит Claude при планировании или вы через «Этапы».'),
+    ),
+    el('div', { class: 'sd-block' },
+      el('div', { class: 'sd-label' }, `Выполнено на этом этапе · ${tasks.length}`),
+      tasks.length
+        ? el('ul', { class: 'sd-tasks' }, tasks.map((t) => el('li', { title: 'Показать в ленте', onclick: () => revealTask(t.id) },
+          timeEl(t.created_at, 'date'),
+          el('div', {},
+            el('div', { class: 'q' }, firstLine(t.task) || (t.source === 'hook' ? 'Сессия' : 'Задача')),
+            t.summary && el('div', { class: 'a' }, firstLine(t.summary, 220)),
+          ))))
+        : el('div', { class: 'muted' }, 'Пока нет задач, привязанных к этапу.'),
     ),
   );
-  box.replaceChildren(
-    el('div', { class: 'section-title' }, 'Проекты'),
-    item('', 'Все проекты', null),
-    ...state.projects.map((p) => item(p.name, p.name, p)),
-  );
-  if (!state.projects.length) box.append(el('div', { class: 'empty-side' }, 'Проекты появятся после первой задачи или правки.'));
 }
+
+function progressCard(detail) {
+  if (state.detailLoading) {
+    return el('section', { class: 'progress-card glass', 'aria-busy': 'true' },
+      el('div', { class: 'pc-head' }, el('span', { class: 'pc-title' }, 'Готовность проекта'), el('span', { class: 'muted' }, 'загрузка…')));
+  }
+  const stages = detail ? detail.stages : [];
+  const progress = detail && detail.progress !== null && detail.progress !== undefined ? detail.progress : null;
+  const head = el('div', { class: 'pc-head' },
+    el('span', { class: 'pc-title' }, 'Готовность проекта'),
+    progress !== null && el('span', { class: 'pc-percent' }, progress + '%'),
+    el('button', { class: 'ghost-btn', type: 'button', onclick: () => openStageEditor() }, icon('edit'), stages.length ? 'Этапы' : 'Задать этапы'),
+  );
+  const card = el('section', { class: 'progress-card glass', 'aria-label': 'Готовность проекта' }, head);
+  if (!stages.length) {
+    card.append(el('div', { class: 'stages-empty' },
+      el('span', {}, 'Этапов пока нет. Claude составит план при следующей задаче (инструкция в CLAUDE.md) — или задайте этапы сами.')));
+    return card;
+  }
+  // Заполнение шкалы идёт по проценту, сегменты — этапы
+  const n = stages.length;
+  const filled = progress !== null ? (progress / 100) * n : stages.filter((s) => s.status === 'done').length;
+  const bar = el('div', { class: 'stages', role: 'list' }, stages.map((s, i) => {
+    const fill = Math.max(0, Math.min(1, filled - i)) * 100;
+    const btn = el('button', {
+      class: `stage ${s.status}${state.stageId === s.id ? ' selected' : ''}`, type: 'button', role: 'listitem',
+      title: `${s.title} — ${STAGE_WORD[s.status]}`, 'aria-expanded': state.stageId === s.id ? 'true' : 'false',
+      onclick: () => { state.stageId = state.stageId === s.id ? null : s.id; renderFeed(); },
+    },
+      el('div', { class: 'seg' }, el('i')),
+      el('div', { class: 'stage-label' }, el('span', { class: 'mk' }, STAGE_MARK[s.status]), el('span', { class: 't' }, s.title)),
+    );
+    // CSS-переменные через setProperty — Object.assign их не выставляет
+    const fillEl = btn.querySelector('.seg i');
+    fillEl.style.setProperty('--fill', fill + '%');
+    fillEl.style.setProperty('--grad-size', n * 100 + '%');
+    fillEl.style.setProperty('--grad-pos', (n > 1 ? (i / (n - 1)) * 100 : 0) + '%');
+    return btn;
+  }));
+  card.append(bar);
+  const idx = stages.findIndex((s) => s.id === state.stageId);
+  if (idx >= 0) card.append(stageDetail(stages[idx], idx, n));
+  return card;
+}
+
+// ---------- редактор этапов ----------
+function stageRow(s = { title: '', description: '', status: 'todo' }) {
+  const row = el('div', { class: 'se-row', dataset: { id: s.id || '' } },
+    el('select', { 'aria-label': 'Статус' },
+      el('option', { value: 'todo' }, '○ Впереди'),
+      el('option', { value: 'active' }, '▶ В работе'),
+      el('option', { value: 'done' }, '✓ Готово')),
+    el('input', { type: 'text', placeholder: 'Название этапа', value: s.title, maxlength: '200', 'aria-label': 'Название этапа' }),
+    el('div', { class: 'se-tools' },
+      el('button', { class: 'icon-btn', type: 'button', title: 'Выше', onclick: () => row.previousElementSibling && row.previousElementSibling.before(row) }, icon('up')),
+      el('button', { class: 'icon-btn', type: 'button', title: 'Ниже', onclick: () => row.nextElementSibling && row.nextElementSibling.after(row) }, icon('down')),
+      el('button', { class: 'icon-btn danger', type: 'button', title: 'Удалить этап', onclick: () => row.remove() }, icon('close')),
+    ),
+    el('textarea', { rows: '2', placeholder: 'Что входит в этап (можно Markdown)', 'aria-label': 'Описание этапа' }),
+  );
+  row.querySelector('select').value = s.status;
+  row.querySelector('textarea').value = s.description || '';
+  return row;
+}
+
+function openStageEditor() {
+  if (!state.project) return;
+  const stages = (state.detail && state.detail.stages) || [];
+  $('#se-title').textContent = `Этапы проекта «${state.project}»`;
+  $('#se-rows').replaceChildren(...(stages.length ? stages.map(stageRow) : [stageRow(), stageRow(), stageRow()]));
+  const reported = state.detail ? state.detail.reported_progress : null;
+  $('#se-progress').value = reported === null || reported === undefined ? '' : reported;
+  $('#stage-editor').showModal();
+  const firstInput = $('#se-rows input');
+  if (firstInput && !firstInput.value) firstInput.focus();
+}
+$('#se-add').addEventListener('click', () => { const row = stageRow(); $('#se-rows').append(row); row.querySelector('input').focus(); });
+$('#se-cancel').addEventListener('click', () => $('#stage-editor').close());
+$('#stage-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const stages = [...$('#se-rows').children].map((row) => ({
+    id: Number(row.dataset.id) || undefined,
+    title: row.querySelector('input').value.trim(),
+    description: row.querySelector('textarea').value.trim(),
+    status: row.querySelector('select').value,
+  })).filter((s) => s.title);
+  const raw = $('#se-progress').value.trim();
+  try {
+    await api(projectUrl(state.project, '/stages'), jsonBody('PUT', { stages, progress: raw === '' ? null : Number(raw) }));
+    $('#stage-editor').close();
+    toast(stages.length ? 'Этапы сохранены' : 'Этапы удалены');
+    loadDetail();
+    loadProjects();
+  } catch (err) { toast(err.message, true); }
+});
 
 // ============ лента задач ============
 function splitPath(p) {
@@ -452,23 +1115,26 @@ function splitPath(p) {
   return i < 0 ? ['', p] : [p.slice(0, i + 1), p.slice(i + 1)];
 }
 
-function clampable(text) {
-  const node = el('div', { class: 'text clamp' }, text);
-  const wrap = el('div', {}, node);
-  requestAnimationFrame(() => {
-    if (node.scrollHeight > node.clientHeight + 2) {
-      node.classList.add('can-expand');
-      const more = el('span', { class: 'more' }, 'показать полностью');
-      const toggle = () => {
-        const exp = node.classList.toggle('expanded');
-        more.textContent = exp ? 'свернуть' : 'показать полностью';
-      };
-      node.addEventListener('click', () => { if (!getSelection().toString()) toggle(); });
-      more.addEventListener('click', toggle);
-      wrap.append(more);
-    }
-  });
-  return wrap;
+function openStageByTitle(project, title) {
+  const go = () => {
+    const st = state.detail && state.detail.stages.find((s) => s.title === title);
+    state.stageId = st ? st.id : null;
+    renderFeed();
+    $('#feed').scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  if (state.project !== project) {
+    selectProject(project);
+    const wait = setInterval(() => { if (state.detail && state.detail.name === project) { clearInterval(wait); go(); } }, 50);
+    setTimeout(() => clearInterval(wait), 3000);
+  } else go();
+}
+
+function revealTask(id) {
+  const card = document.querySelector(`.task[data-id="${id}"]`);
+  if (!card) return toast('Эта задача ниже в ленте — нажмите «Показать ещё»');
+  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  card.classList.add('flash');
+  setTimeout(() => card.classList.remove('flash'), 1600);
 }
 
 function taskCard(t) {
@@ -482,14 +1148,15 @@ function taskCard(t) {
         class: 'badge ' + (t.source === 'hook' ? 'hook' : 'agent'),
         title: t.source === 'hook' ? 'Собрано хуком SessionEnd из транскрипта сессии' : 'Отчёт агента',
       }, t.source === 'hook' ? 'авто · конец сессии' : 'отчёт агента'),
+      t.stage && el('span', { class: 'chip link stage-chip', title: 'Открыть этап на шкале', onclick: () => openStageByTitle(t.project, t.stage) }, '◆ ' + t.stage),
       t.session_id && el('span', {
         class: 'sid', title: 'Сессия ' + t.session_id + ' — нажмите, чтобы скопировать',
         onclick: () => navigator.clipboard?.writeText(t.session_id).then(() => toast('session_id скопирован')),
       }, '#' + t.session_id.slice(0, 8)),
-      el('button', { class: 'icon-btn', type: 'button', title: 'Удалить запись', onclick: () => deleteTask(t) }, '×'),
+      el('button', { class: 'icon-btn danger', type: 'button', title: 'Удалить запись', onclick: () => deleteTask(t) }, icon('close')),
     ),
-    t.task && el('div', { class: 'field req' }, el('div', { class: 'label' }, 'Запрос'), clampable(t.task)),
-    t.summary && el('div', { class: 'field' }, el('div', { class: 'label' }, t.source === 'hook' ? 'Итог' : 'Сделано'), clampable(t.summary)),
+    t.task && el('div', { class: 'field' }, el('div', { class: 'label' }, 'Запрос'), collapsible(requestNode(t.task), 130, `t${t.id}q`)),
+    t.summary && el('div', { class: 'field' }, el('div', { class: 'label' }, t.source === 'hook' ? 'Итог' : 'Сделано'), collapsible(markdownNode(t.summary), 340, `t${t.id}s`)),
     t.status && el('div', { class: 'status-line' }, el('b', {}, 'Статус проекта:'), ' ', t.status),
     files.length > 0 && el('details', { class: 'files' },
       el('summary', {}, `Файлы · ${files.length}`),
@@ -500,17 +1167,32 @@ function taskCard(t) {
 
 function renderFeed() {
   const feed = $('#feed');
-  const p = state.project && state.projects.find((x) => x.name === state.project);
-  const head = el('div', { class: 'feed-head' },
-    el('h2', {}, state.project || 'Все проекты'),
-    el('span', { class: 'sub' }, state.tasks.length ? 'свежие сверху' : ''),
-  );
-  const nodes = [head];
-  if (p && p.status) nodes.push(el('div', { class: 'project-status' }, el('b', {}, 'Статус проекта'), p.status));
+  const p = state.project && projectByName(state.project);
+  const nodes = [];
+  if (state.project) {
+    const archived = p && p.archived;
+    nodes.push(el('div', { class: 'feed-head' },
+      el('h2', {}, state.project),
+      p && p.pinned && !archived && el('span', { class: 'tag pinned' }, icon('pin'), 'закреплён'),
+      archived && el('span', { class: 'tag archived' }, icon('archive'), 'в архиве'),
+      p && el('div', { class: 'head-actions' },
+        !archived && el('button', { class: 'ghost-btn' + (p.pinned ? ' on' : ''), type: 'button', onclick: () => togglePin(p) }, icon('pin'), p.pinned ? 'Открепить' : 'Закрепить'),
+        el('button', { class: 'ghost-btn', type: 'button', onclick: () => toggleArchive(p) }, icon(archived ? 'unarchive' : 'archive'), archived ? 'Вернуть из архива' : 'В архив'),
+      ),
+    ));
+    if (p && p.status) nodes.push(el('div', { class: 'project-status' }, el('b', {}, 'Статус'), p.status));
+    nodes.push(progressCard(state.detail));
+  } else {
+    const hidden = state.projects.filter((x) => x.archived).length;
+    nodes.push(el('div', { class: 'feed-head' },
+      el('h2', {}, 'Все проекты'),
+      el('span', { class: 'sub' }, hidden ? `свежие сверху · архив (${hidden}) скрыт` : 'свежие сверху'),
+    ));
+  }
   if (!state.tasks.length) {
     nodes.push(el('div', { class: 'empty' },
       el('div', {}, 'Задач пока нет.'),
-      el('div', { style: 'margin-top:8px;font-size:12.5px' },
+      el('div', { style: { marginTop: '8px', fontSize: '12.5px' } },
         'Они появятся, когда агент завершит сессию (хук SessionEnd) или отправит отчёт: ',
         el('code', {}, 'POST /api/tasks')),
     ));
@@ -521,11 +1203,11 @@ function renderFeed() {
     if (day !== lastDay) { nodes.push(el('div', { class: 'day' }, day)); lastDay = day; }
     nodes.push(taskCard(t));
   }
-  if (state.hasMore) nodes.push(el('button', { class: 'load-more', type: 'button', onclick: () => loadTasks({ append: true }) }, 'Показать ещё'));
+  if (state.hasMore) nodes.push(el('button', { class: 'ghost-btn load-more', type: 'button', onclick: () => loadTasks({ append: true }) }, 'Показать ещё'));
   // сохраняем раскрытые списки файлов между перерисовками
-  const open = new Set([...feed.querySelectorAll('.task')].filter((c) => c.querySelector('details[open]')).map((c) => c.dataset.id));
+  const open = new Set([...feed.querySelectorAll('.task')].filter((c) => c.querySelector('details.files[open]')).map((c) => c.dataset.id));
   feed.replaceChildren(...nodes);
-  open.forEach((id) => feed.querySelector(`.task[data-id="${id}"] details`)?.setAttribute('open', ''));
+  open.forEach((id) => feed.querySelector(`.task[data-id="${id}"] details.files`)?.setAttribute('open', ''));
 }
 
 async function deleteTask(t) {
@@ -535,10 +1217,19 @@ async function deleteTask(t) {
     state.tasks = state.tasks.filter((x) => x.id !== t.id);
     renderFeed();
     loadProjects();
+    loadDetail();
   } catch (e) { toast(e.message, true); }
 }
 
 // ============ правки: список ============
+let editingNote = false;
+
+function doneByBadge(n) {
+  if (n.done_by === 'claude') return el('span', { class: 'by claude', title: 'Отмечено агентом через API' }, '✓ закрыл Claude');
+  if (n.done_by === 'user') return el('span', { class: 'by user', title: 'Отмечено вами в дашборде' }, '✓ закрыли вы');
+  return el('span', { class: 'by unknown' }, '✓ сделано');
+}
+
 function noteItem(n) {
   const done = n.status === 'done';
   const textNode = el('div', { class: 'note-text' + (n.text ? '' : ' placeholder') }, n.text || 'без текста');
@@ -560,10 +1251,7 @@ function noteItem(n) {
       const value = textNode.innerText.trim();
       if (save && value !== original) {
         try {
-          const updated = await api('/api/notes/' + n.id, {
-            method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: value }),
-          });
-          Object.assign(n, updated);
+          Object.assign(n, await api('/api/notes/' + n.id, jsonBody('PATCH', { text: value })));
           toast('Текст правки сохранён');
         } catch (e) { toast(e.message, true); }
       }
@@ -586,43 +1274,38 @@ function noteItem(n) {
     }),
     el('div', {},
       textNode,
-      n.audio_path && el('audio', { controls: true, preload: 'none', src: n.audio_path }),
+      n.audio_path && el('audio', { controls: true, preload: 'metadata', src: n.audio_path }),
       n.images.length > 0 && el('div', { class: 'thumbs' }, n.images.map((src) => el('img', { src, alt: 'скриншот', loading: 'lazy', onclick: () => openLightbox(src) }))),
       el('div', { class: 'note-meta' },
         !state.project && el('span', { class: 'chip link', onclick: () => selectProject(n.project) }, n.project),
         el('span', {}, '#' + n.id),
+        done && doneByBadge(n),
         timeEl(done && n.done_at ? n.done_at : n.created_at, 'rel'),
-        done && el('span', {}, '· сделано'),
-        el('button', { class: 'icon-btn edit', type: 'button', title: 'Редактировать текст (или двойной клик)', onclick: startEdit, style: 'margin-left:auto' }, '✎'),
-        el('button', { class: 'icon-btn', type: 'button', title: 'Удалить правку', onclick: () => deleteNote(n), style: 'margin-left:0' }, '×'),
+        el('button', { class: 'icon-btn push', type: 'button', title: 'Редактировать текст (или двойной клик)', onclick: startEdit }, icon('edit')),
+        el('button', { class: 'icon-btn danger', type: 'button', title: 'Удалить правку', onclick: () => deleteNote(n) }, icon('close')),
       ),
     ),
   );
 }
 
-let editingNote = false;
 function renderNotes() {
   // не перерисовываем список, пока пользователь редактирует текст правки
   if (editingNote) return;
   const open = state.notes.filter((n) => n.status === 'open');
   const done = state.notes.filter((n) => n.status === 'done');
-  $('#notes-open').replaceChildren(
-    ...(open.length ? open.map(noteItem) : [el('div', { class: 'notes-empty' }, 'Открытых правок нет.')]),
-  );
+  $('#notes-open').replaceChildren(...(open.length ? open.map(noteItem) : [el('div', { class: 'notes-empty' }, 'Открытых правок нет.')]));
   const count = $('#notes-count');
   count.hidden = !open.length;
   count.textContent = open.length;
   $('#notes-done-wrap').hidden = !done.length;
-  $('#notes-done-title').textContent = `Сделано (${done.length})`;
+  const byClaude = done.filter((n) => n.done_by === 'claude').length;
+  $('#notes-done-title').textContent = `Сделано (${done.length})` + (byClaude ? ` · Claude закрыл ${byClaude}` : '');
   $('#notes-done').replaceChildren(...done.map(noteItem));
 }
 
 async function setNoteStatus(n, status) {
   try {
-    const updated = await api('/api/notes/' + n.id, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }),
-    });
-    Object.assign(n, updated);
+    Object.assign(n, await api('/api/notes/' + n.id, jsonBody('PATCH', status === 'done' ? { status, done_by: 'user' } : { status })));
     renderNotes();
     loadProjects();
   } catch (e) { toast(e.message, true); renderNotes(); }
@@ -649,12 +1332,11 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('#lightb
 const pending = { audio: null, audioUrl: null, images: [] };
 
 function renderAttachments() {
-  const box = $('#attachments');
   const nodes = [];
   if (pending.audio) {
     nodes.push(el('div', { class: 'audio-att' },
       el('audio', { controls: true, src: pending.audioUrl }),
-      el('button', { class: 'x', type: 'button', title: 'Убрать запись', onclick: () => { setAudio(null); } }, '×'),
+      el('button', { class: 'x', type: 'button', title: 'Убрать запись', onclick: () => setAudio(null) }, '×'),
     ));
   }
   pending.images.forEach((img, i) => {
@@ -663,7 +1345,7 @@ function renderAttachments() {
       el('button', { class: 'x', type: 'button', title: 'Убрать', onclick: () => { URL.revokeObjectURL(img.url); pending.images.splice(i, 1); renderAttachments(); } }, '×'),
     ));
   });
-  box.replaceChildren(...nodes);
+  $('#attachments').replaceChildren(...nodes);
 }
 
 function setAudio(blob) {
@@ -716,7 +1398,7 @@ $('#note-text').addEventListener('keydown', (e) => {
 
 $('#composer').addEventListener('submit', async (e) => {
   e.preventDefault();
-  if (recorder && recorder.state !== 'inactive') {
+  if (voice.recorder) {
     await stopRecording();
     // финальный кусок расшифровки приходит чуть позже остановки
     await new Promise((r) => setTimeout(r, 400));
@@ -738,13 +1420,14 @@ $('#composer').addEventListener('submit', async (e) => {
   btn.disabled = true;
   try {
     await api('/api/notes', { method: 'POST', body: fd });
-    try { localStorage.setItem('lastNoteProject', project); } catch { /* storage недоступен */ }
+    storage.set('lastNoteProject', project);
     $('#note-text').value = '';
     $('#interim').textContent = '';
     setAudio(null);
     pending.images.forEach((img) => URL.revokeObjectURL(img.url));
     pending.images = [];
     renderAttachments();
+    setHint('');
     toast(state.project && project !== state.project ? `Правка добавлена в проект «${project}»` : 'Правка добавлена');
     loadNotes();
     loadProjects();
@@ -756,20 +1439,30 @@ $('#composer').addEventListener('submit', async (e) => {
 });
 
 // ============ голос: MediaRecorder + Web Speech API ============
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-let recorder = null, recStream = null, recognition = null, recStartedAt = 0, recTimer = null;
-let recognitionBroken = false, recognitionWanted = false, stopResolve = null;
+// Один захват микрофона: тот же аудиотрек идёт и в запись, и в распознавание (Chrome 135+).
+// Раньше распознавание открывало микрофон второй раз, и на части систем запись обрывалась
+// через несколько секунд. Ошибки распознавания никогда не останавливают запись звука.
+const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+const voice = {
+  recorder: null, stream: null, track: null, chunks: [], startedAt: 0, timer: null, userStopped: false, stopResolve: null,
+  recognizing: false, recognition: null, srTrack: null, srBroken: false, srStartedAt: 0, quickEnds: 0,
+  mode: 'cloud', shareTrack: true, localDownloadable: false,
+  audioCtx: null, levelRaf: 0,
+};
 
-function setHint(text, warn) {
+const DEFAULT_HINT = '<kbd>Ctrl</kbd>+<kbd>V</kbd> — вставить скриншот · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> — добавить';
+function setHint(text, warn, extra) {
   const h = $('#composer-hint');
   if (!text) {
     h.className = 'hint';
-    h.innerHTML = '<kbd>Ctrl</kbd>+<kbd>V</kbd> — вставить скриншот · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> — добавить';
-  } else {
-    h.className = 'hint' + (warn ? ' warn' : '');
-    h.textContent = text;
+    h.innerHTML = DEFAULT_HINT;
+    return;
   }
+  h.className = 'hint' + (warn ? ' warn' : '');
+  h.replaceChildren(el('span', {}, text));
+  if (extra) h.append(el('div', {}, extra));
 }
+setHint('');
 
 function appendTranscript(chunk) {
   const ta = $('#note-text');
@@ -782,46 +1475,131 @@ function appendTranscript(chunk) {
   ta.scrollTop = ta.scrollHeight;
 }
 
-function startRecognition() {
-  if (!SpeechRecognition) {
-    setHint('Расшифровка голоса работает в Chrome/Edge. Аудио всё равно сохранится — текст можно дописать вручную.', true);
-    return;
-  }
-  recognitionBroken = false;
-  recognitionWanted = true;
-  const start = () => {
-    recognition = new SpeechRecognition();
-    recognition.lang = 'ru-RU';
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.onresult = (e) => {
-      let interim = '';
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const r = e.results[i];
-        if (r.isFinal) appendTranscript(r[0].transcript);
-        else interim += r[0].transcript;
-      }
-      $('#interim').textContent = interim;
-    };
-    recognition.onerror = (e) => {
-      if (e.error === 'no-speech' || e.error === 'aborted') return;
-      recognitionBroken = true;
-      const msg = {
-        'not-allowed': 'Браузер запретил распознавание речи. Аудио записывается, текст можно ввести вручную.',
-        'service-not-allowed': 'Сервис распознавания недоступен в этом браузере. Аудио записывается.',
-        network: 'Нет связи с сервисом распознавания речи. Аудио записывается.',
-        'language-not-supported': 'Русский язык не поддерживается распознаванием в этом браузере.',
-      }[e.error] || `Ошибка распознавания: ${e.error}. Аудио записывается.`;
-      setHint(msg, true);
-    };
-    // Chrome сам останавливает распознавание после паузы — перезапускаем, пока идёт запись
-    recognition.onend = () => {
-      $('#interim').textContent = '';
-      if (recognitionWanted && !recognitionBroken) { try { start(); } catch { /* ignore */ } }
-    };
-    recognition.start();
+function withTimeout(promise, ms, fallback) {
+  return Promise.race([promise, new Promise((r) => setTimeout(() => r(fallback), ms))]);
+}
+
+// Офлайн-распознавание (Chrome 139+): работает без интернета и без серверов Google
+async function detectRecognitionMode() {
+  voice.localDownloadable = false;
+  if (!SpeechRec || typeof SpeechRec.available !== 'function') return 'cloud';
+  try {
+    const st = await withTimeout(SpeechRec.available({ langs: ['ru-RU'], processLocally: true }), 1500, 'unknown');
+    if (st === 'available') return 'local';
+    voice.localDownloadable = st === 'downloadable' || st === 'downloading';
+  } catch { /* другая версия API */ }
+  return 'cloud';
+}
+
+function installOfflineButton() {
+  const btn = el('button', { class: 'btn', type: 'button' }, 'Скачать офлайн-распознавание русского');
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    btn.textContent = 'Скачиваю модель…';
+    try {
+      const ok = await SpeechRec.install({ langs: ['ru-RU'], processLocally: true });
+      if (ok === false) throw new Error('браузер отказал в установке');
+      voice.localDownloadable = false;
+      setHint('Офлайн-распознавание установлено — следующая запись расшифруется без интернета.');
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = 'Скачать офлайн-распознавание русского';
+      toast('Не удалось скачать модель: ' + e.message, true);
+    }
+  });
+  return btn;
+}
+
+function handleRecognitionError(code, message) {
+  if (code === 'no-speech' || code === 'aborted') return; // тишина или наш stop — onend перезапустит
+  if (code === 'language-not-supported' && voice.mode === 'local') { voice.mode = 'cloud'; return; }
+  voice.srBroken = true;
+  const texts = {
+    network: 'Нет связи с сервисом распознавания речи. В Яндекс Браузере, Opera и Brave он обычно недоступен — откройте дашборд в Chrome или Edge.',
+    'not-allowed': 'Браузер запретил распознавание речи для этой страницы.',
+    'service-not-allowed': 'Распознавание речи отключено в этом браузере.',
+    'audio-capture': 'Распознаванию не удалось получить звук микрофона.',
+    'language-not-supported': 'Русский язык не поддерживается распознаванием в этом браузере.',
   };
-  try { start(); } catch (e) { setHint('Не удалось запустить распознавание: ' + e.message, true); }
+  const text = (texts[code] || `Ошибка распознавания: ${code}${message ? ` (${message})` : ''}.`)
+    + ' Запись звука продолжается, текст можно ввести вручную.';
+  const canInstall = voice.localDownloadable && typeof SpeechRec.install === 'function' && code !== 'not-allowed';
+  setHint(text, true, canInstall ? installOfflineButton() : null);
+}
+
+function startRecognitionSession() {
+  const r = new SpeechRec();
+  r.lang = 'ru-RU';
+  r.continuous = true;
+  r.interimResults = true;
+  if (voice.mode === 'local') { try { r.processLocally = true; } catch { /* нет поддержки */ } }
+  r.onresult = (e) => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const res = e.results[i];
+      if (res.isFinal) appendTranscript(res[0].transcript);
+      else interim += res[0].transcript;
+    }
+    $('#interim').textContent = interim;
+  };
+  r.onerror = (e) => handleRecognitionError(e.error, e.message);
+  r.onend = () => {
+    $('#interim').textContent = '';
+    if (voice.srTrack) { voice.srTrack.stop(); voice.srTrack = null; }
+    if (voice.recognition === r) voice.recognition = null;
+    if (!voice.recognizing || voice.srBroken) return;
+    // Chrome сам завершает распознавание после паузы — перезапускаем, но не в бесконечном цикле
+    voice.quickEnds = Date.now() - voice.srStartedAt < 1000 ? voice.quickEnds + 1 : 0;
+    if (voice.quickEnds >= 5) {
+      voice.srBroken = true;
+      setHint('Распознавание речи постоянно обрывается. Запись звука продолжается, текст можно ввести вручную.', true);
+      return;
+    }
+    setTimeout(() => { if (voice.recognizing && !voice.srBroken) startRecognitionSession(); }, voice.quickEnds ? 300 : 0);
+  };
+  voice.recognition = r;
+  voice.srStartedAt = Date.now();
+  if (voice.shareTrack && voice.track && voice.track.readyState === 'live') {
+    const t = voice.track.clone();
+    try {
+      r.start(t);
+      voice.srTrack = t;
+      return;
+    } catch (e) {
+      t.stop();
+      // TypeError — браузер не умеет распознавать из трека, работаем по-старому
+      if (!(e instanceof TypeError)) return handleRecognitionError(e.name || 'start-failed', e.message);
+      voice.shareTrack = false;
+    }
+  }
+  try { r.start(); } catch (e) { handleRecognitionError(e.name || 'start-failed', e.message); }
+}
+
+function startLevelMeter(stream) {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    voice.audioCtx = new Ctx();
+    const analyser = voice.audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    voice.audioCtx.createMediaStreamSource(stream).connect(analyser);
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    const bars = [...document.querySelectorAll('#rec-level i')];
+    $('#rec-level').hidden = false;
+    const tick = () => {
+      analyser.getByteTimeDomainData(data);
+      let peak = 0;
+      for (const v of data) peak = Math.max(peak, Math.abs(v - 128));
+      const level = Math.min(1, peak / 64);
+      bars.forEach((b, i) => { b.style.height = `${3 + Math.max(0, level * 13 - Math.abs(i - 2) * 3)}px`; });
+      voice.levelRaf = requestAnimationFrame(tick);
+    };
+    tick();
+  } catch { /* индикатор необязателен */ }
+}
+function stopLevelMeter() {
+  cancelAnimationFrame(voice.levelRaf);
+  $('#rec-level').hidden = true;
+  if (voice.audioCtx) { voice.audioCtx.close().catch(() => {}); voice.audioCtx = null; }
 }
 
 function pickMime() {
@@ -831,56 +1609,106 @@ function pickMime() {
   return '';
 }
 
+function micErrorText(e) {
+  const map = {
+    NotAllowedError: 'доступ к микрофону запрещён — разрешите его в настройках сайта (значок слева от адреса)',
+    NotFoundError: 'микрофон не найден',
+    NotReadableError: 'микрофон занят другим приложением или не отвечает',
+    OverconstrainedError: 'микрофон не поддерживает нужные параметры',
+    SecurityError: 'страница открыта не по localhost/https — браузер не даёт доступ к микрофону',
+  };
+  return 'Нет доступа к микрофону: ' + (map[e.name] || e.message || e.name);
+}
+
+function resetRecordingUi() {
+  clearInterval(voice.timer);
+  stopLevelMeter();
+  $('#rec-btn').classList.remove('recording');
+  $('#rec-label').textContent = 'Голос';
+  $('#rec-timer').hidden = true;
+}
+
+function stopRecognition() {
+  voice.recognizing = false;
+  try { voice.recognition && voice.recognition.stop(); } catch { /* уже остановлено */ }
+}
+
+function finishRecording(rec) {
+  if (voice.recorder !== rec) return;
+  voice.recorder = null;
+  voice.stream.getTracks().forEach((t) => t.stop());
+  if (voice.chunks.length) setAudio(new Blob(voice.chunks, { type: (rec.mimeType || 'audio/webm').split(';')[0] }));
+  if (!voice.userStopped) { stopRecognition(); resetRecordingUi(); }
+  if (voice.stopResolve) { voice.stopResolve(); voice.stopResolve = null; }
+}
+
 async function startRecording() {
   if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
-    return toast('Браузер не поддерживает запись звука', true);
+    return toast(window.isSecureContext ? 'Браузер не поддерживает запись звука' : 'Запись звука работает только на http://localhost:4000 (или https)', true);
   }
+  let stream;
   try {
-    recStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
   } catch (e) {
-    return toast('Нет доступа к микрофону: ' + (e.message || e.name), true);
+    return toast(micErrorText(e), true);
   }
   const mime = pickMime();
-  const chunks = [];
-  recorder = new MediaRecorder(recStream, mime ? { mimeType: mime } : undefined);
-  recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-  recorder.onstop = () => {
-    recStream.getTracks().forEach((t) => t.stop());
-    if (chunks.length) setAudio(new Blob(chunks, { type: (recorder.mimeType || 'audio/webm').split(';')[0] }));
-    if (stopResolve) { stopResolve(); stopResolve = null; }
-  };
-  recorder.start(1000);
-  recStartedAt = Date.now();
+  let rec;
+  try {
+    rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+  } catch (e) {
+    stream.getTracks().forEach((t) => t.stop());
+    return toast('Не удалось начать запись: ' + e.message, true);
+  }
+  Object.assign(voice, { stream, track: stream.getAudioTracks()[0], recorder: rec, chunks: [], userStopped: false, srBroken: false, quickEnds: 0 });
+  rec.ondataavailable = (e) => { if (e.data && e.data.size) voice.chunks.push(e.data); };
+  rec.onerror = (e) => toast('Ошибка записи: ' + ((e.error && (e.error.message || e.error.name)) || 'неизвестная'), true);
+  rec.onstop = () => finishRecording(rec);
+  voice.track.addEventListener('ended', () => {
+    if (voice.recorder === rec && rec.state !== 'inactive') {
+      toast('Микрофон отключился — запись остановлена, звук до этого момента сохранён', true);
+      stopRecording();
+    }
+  });
+  rec.start(1000);
+  voice.startedAt = Date.now();
   $('#rec-btn').classList.add('recording');
   $('#rec-label').textContent = 'Стоп';
   $('#rec-timer').hidden = false;
   const tick = () => {
-    const s = Math.floor((Date.now() - recStartedAt) / 1000);
+    const s = Math.floor((Date.now() - voice.startedAt) / 1000);
     $('#rec-timer').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   };
   tick();
-  recTimer = setInterval(tick, 500);
-  setHint('Идёт запись… говорите. Текст появится в поле, его можно поправить.');
-  startRecognition();
+  voice.timer = setInterval(tick, 500);
+  startLevelMeter(stream);
+
+  if (!SpeechRec) {
+    setHint('Идёт запись. Расшифровка голоса работает в Chrome и Edge — здесь сохранится только аудио.', true);
+    return;
+  }
+  voice.mode = await detectRecognitionMode();
+  if (voice.recorder !== rec) return; // запись уже остановили
+  setHint(`Идёт запись… говорите. Текст появится в поле, его можно поправить${voice.mode === 'local' ? ' (распознавание офлайн)' : ''}.`);
+  voice.recognizing = true;
+  startRecognitionSession();
 }
 
 function stopRecording() {
-  recognitionWanted = false;
-  try { recognition && recognition.stop(); } catch { /* ignore */ }
-  clearInterval(recTimer);
-  $('#rec-btn').classList.remove('recording');
-  $('#rec-label').textContent = 'Голос';
-  $('#rec-timer').hidden = true;
-  if (!recognitionBroken) setHint('');
+  voice.userStopped = true;
+  stopRecognition();
+  resetRecordingUi();
+  if (!voice.srBroken) setHint('');
   return new Promise((resolve) => {
-    if (!recorder || recorder.state === 'inactive') return resolve();
-    stopResolve = resolve;
-    recorder.stop();
+    const rec = voice.recorder;
+    if (!rec || rec.state === 'inactive') { if (rec) finishRecording(rec); return resolve(); }
+    voice.stopResolve = resolve;
+    rec.stop();
   });
 }
 
 $('#rec-btn').addEventListener('click', () => {
-  if (recorder && recorder.state === 'recording') stopRecording();
+  if (voice.recorder) stopRecording();
   else startRecording();
 });
 
@@ -889,31 +1717,39 @@ function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTi
 const refreshTasks = debounce(() => loadTasks(), 150);
 const refreshNotes = debounce(() => loadNotes(), 150);
 const refreshProjects = debounce(() => loadProjects(), 150);
+const refreshDetail = debounce(() => loadDetail(), 150);
 
 function connectEvents() {
   const live = $('#live');
   const es = new EventSource('/api/events');
+  let first = true;
   es.onopen = () => {
     live.classList.add('on');
     live.querySelector('span').textContent = 'онлайн';
     // после переподключения могли пропустить события
-    refreshProjects(); refreshTasks(); refreshNotes();
+    if (!first) { refreshProjects(); refreshTasks(); refreshNotes(); refreshDetail(); }
+    first = false;
   };
   es.onerror = () => {
     live.classList.remove('on');
     live.querySelector('span').textContent = 'нет связи — переподключаюсь…';
   };
   es.addEventListener('change', (e) => {
-    const { kind } = JSON.parse(e.data);
+    const { kind, project } = JSON.parse(e.data);
     refreshProjects();
-    if (kind === 'task') refreshTasks();
-    if (kind === 'note') refreshNotes();
+    const mine = !state.project || !project || project === state.project;
+    if (kind === 'task' && mine) { refreshTasks(); refreshDetail(); }
+    if (kind === 'note' && mine) refreshNotes();
+    if (kind === 'project') {
+      if (!state.project) { refreshTasks(); refreshNotes(); } else if (mine) refreshDetail();
+    }
   });
 }
 
 // ============ старт ============
 setInterval(refreshRelativeTimes, 30000);
 state.project = readHash();
+state.detailLoading = !!state.project;
 loadProjects().then(() => applyProject(state.project));
 connectEvents();
 </script>

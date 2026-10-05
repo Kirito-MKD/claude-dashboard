@@ -212,7 +212,7 @@ test('session-start.js печатает открытые правки проек
     assert.ok(out.indexOf(`#${note.id}`) < out.indexOf(`#${later.id}`), 'от старых к новым');
     assert.ok(!out.includes('Уже сделано'));
     assert.ok(!out.includes('Не наша правка'));
-    assert.match(out, /PATCH .*\/api\/notes\/<id>/);
+    assert.match(out, /PATCH .*\/api\/notes\/<id> .*"done_by":"claude"/);
 
     const empty = await runHook('session-start.js', { session_id: 's', cwd: '/work/clean' }, { AGENT_DASHBOARD_URL: srv.base });
     assert.match(empty.stdout, /Открытых правок от пользователя для этого проекта нет/);
@@ -237,4 +237,29 @@ test('хук без stdin (ручной запуск) не зависает', as
   // stdin открыт, но ничего не приходит
   const code = await new Promise((resolve) => child.on('exit', resolve));
   assert.equal(code, 0);
+});
+
+test('session-start.js показывает этапы, готовность и названия этапов для поля stage', async () => {
+  const srv = await startServer();
+  try {
+    await fetch(`${srv.base}/api/stages`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project: 'my-shop', progress: 60, stages: [
+        { title: 'Каталог', description: 'Товары и фильтры', status: 'done' },
+        { title: 'Корзина', description: 'Пересчёт суммы, скидки', status: 'active' },
+        { title: 'Оплата', status: 'todo' },
+      ] }),
+    });
+    const r = await runHook('session-start.js', { session_id: 's1', cwd: PROJECT_DIR }, { AGENT_DASHBOARD_URL: srv.base });
+    assert.equal(r.status, 0);
+    assert.match(r.stdout, /Этапы проекта \(3, готовность 60%\); в отчёте поле stage — точное название этапа:/);
+    assert.match(r.stdout, /✓ 1\. Каталог — завершён: Товары и фильтры/);
+    assert.match(r.stdout, /▶ 2\. Корзина — в работе: Пересчёт суммы, скидки/);
+    assert.match(r.stdout, /○ 3\. Оплата — впереди/);
+
+    const fresh = await runHook('session-start.js', { session_id: 's2', cwd: '/work/brand-new' }, { AGENT_DASHBOARD_URL: srv.base });
+    assert.match(fresh.stdout, /Этапы проекта в дашборде ещё не заданы/);
+  } finally {
+    await srv.stop();
+  }
 });

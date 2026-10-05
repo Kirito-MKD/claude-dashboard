@@ -4,7 +4,8 @@ const fs = require('fs');
 const crypto = require('crypto');
 const express = require('express');
 const multer = require('multer');
-const { openDb } = require('./db');
+const { openDb, STAGE_STATUSES } = require('./db');
+const { version: VERSION } = require('./package.json');
 
 const DEFAULT_PORT = 4000;
 const LOCAL_HOSTS = ['localhost', '127.0.0.1', '::1', '[::1]'];
@@ -56,6 +57,54 @@ function normalizeFiles(value) {
     if (out.length >= 2000) break;
   }
   return out;
+}
+
+// Процент готовности: undefined — не передан, null — сбросить (считать по этапам)
+function parseProgress(value, { allowNull = false } = {}) {
+  if (value === undefined || value === '') return undefined;
+  if (value === null) {
+    if (allowNull) return null;
+    return undefined;
+  }
+  const n = Number(String(value).replace('%', '').trim());
+  if (!Number.isFinite(n)) throw new HttpError(400, 'progress должен быть числом от 0 до 100');
+  return Math.min(100, Math.max(0, Math.round(n)));
+}
+
+const STATUS_ALIASES = {
+  todo: 'todo', pending: 'todo', planned: 'todo', open: 'todo',
+  active: 'active', in_progress: 'active', 'in-progress': 'active', doing: 'active', current: 'active',
+  done: 'done', completed: 'done', complete: 'done', finished: 'done',
+};
+
+function parseStageStatus(value) {
+  if (value === undefined || value === null || value === '') return undefined;
+  const status = STATUS_ALIASES[String(value).trim().toLowerCase()];
+  if (!status || !STAGE_STATUSES.has(status)) throw new HttpError(400, 'Статус этапа: todo, active или done');
+  return status;
+}
+
+// План этапов: массив или { stages: [...] }; элемент — строка-название или объект
+function parseStages(body) {
+  const list = Array.isArray(body) ? body : body && Array.isArray(body.stages) ? body.stages : null;
+  if (!list) throw new HttpError(400, 'Ожидается { "stages": [ { "title", "description", "status" }, ... ] }');
+  if (list.length > 40) throw new HttpError(400, 'Слишком много этапов (максимум 40)');
+  const seen = new Set();
+  return list.map((raw) => {
+    const item = typeof raw === 'string' ? { title: raw } : raw || {};
+    const title = str(item.title !== undefined ? item.title : item.name, 200).trim();
+    if (!title) throw new HttpError(400, 'У каждого этапа должно быть название (title)');
+    const key = title.toLowerCase();
+    if (seen.has(key)) throw new HttpError(400, `Этап «${title}» указан дважды`);
+    seen.add(key);
+    const id = Number(item.id);
+    return {
+      id: Number.isInteger(id) && id > 0 ? id : undefined,
+      title,
+      description: item.description !== undefined ? str(item.description, 4000).trim() : undefined,
+      status: parseStageStatus(item.status),
+    };
+  });
 }
 
 function parseId(value) {
@@ -163,7 +212,7 @@ function createApp(options = {}) {
   const noteUpload = upload.fields([{ name: 'audio', maxCount: 1 }, { name: 'images', maxCount: 30 }]);
 
   // ---------- API ----------
-  app.get('/api/health', (req, res) => res.json({ ok: true }));
+  app.get('/api/health', (req, res) => res.json({ ok: true, app: 'agent-dashboard', version: VERSION, pid: process.pid }));
 
   app.post('/api/tasks', (req, res) => {
     const b = req.body && typeof req.body === 'object' ? req.body : {};
@@ -175,6 +224,8 @@ function createApp(options = {}) {
       status: optStr(b.status, 2000),
       session_id: optStr(b.session_id, 200),
       source: b.source === 'hook' ? 'hook' : 'agent',
+      stage: optStr(b.stage, 200),
+      progress: parseProgress(b.progress),
     });
     broadcast('task', task.project);
     res.status(created ? 201 : 200).json(task);
@@ -183,7 +234,13 @@ function createApp(options = {}) {
   app.get('/api/tasks', (req, res) => {
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 500);
     const before = req.query.before ? parseId(req.query.before) : undefined;
-    res.json(db.listTasks({ project: optStr(req.query.project, 200), limit, before }));
+    res.json(db.listTasks({
+      project: optStr(req.query.project, 200),
+      stage: optStr(req.query.stage, 200),
+      excludeArchived: req.query.hide_archived === '1',
+      limit,
+      before,
+    }));
   });
 
   app.delete('/api/tasks/:id', (req, res) => {
@@ -193,6 +250,60 @@ function createApp(options = {}) {
   });
 
   app.get('/api/projects', (req, res) => res.json(db.listProjects()));
+
+  app.get('/api/projects/:name', (req, res) => {
+    const project = db.getProject(req.params.name, { withTasks: req.query.tasks !== '0' });
+    if (!project) throw new HttpError(404, 'Проект не найден');
+    res.json(project);
+  });
+
+  app.patch('/api/projects/:name', (req, res) => {
+    const name = requireProject(req.params.name);
+    const b = req.body && typeof req.body === 'object' ? req.body : {};
+    const patch = {};
+    if (b.pinned !== undefined) patch.pinned = !!b.pinned;
+    if (b.archived !== undefined) patch.archived = !!b.archived;
+    const progress = parseProgress(b.progress, { allowNull: true });
+    if (progress !== undefined) patch.progress = progress;
+    if (!Object.keys(patch).length) throw new HttpError(400, 'Нечего менять: передайте pinned, archived или progress');
+    if (!db.getProject(name, { withTasks: false })) throw new HttpError(404, 'Проект не найден');
+    db.updateProject(name, patch);
+    broadcast('project', name);
+    res.json(db.getProject(name, { withTasks: false }));
+  });
+
+  function putStages(name, body, res) {
+    const stages = parseStages(body);
+    db.replaceStages(name, stages);
+    const progress = parseProgress(body && body.progress, { allowNull: true });
+    if (progress !== undefined) db.updateProject(name, { progress });
+    broadcast('project', name);
+    res.json(db.getProject(name));
+  }
+  app.put('/api/projects/:name/stages', (req, res) => putStages(requireProject(req.params.name), req.body, res));
+  // То же, но проект в теле — агенту не нужно кодировать кириллицу в URL
+  app.put('/api/stages', (req, res) => putStages(requireProject(req.body && req.body.project), req.body, res));
+
+  app.patch('/api/projects/:name/stages/:id', (req, res) => {
+    const name = requireProject(req.params.name);
+    const b = req.body && typeof req.body === 'object' ? req.body : {};
+    const patch = {};
+    if (b.title !== undefined) {
+      patch.title = str(b.title, 200).trim();
+      if (!patch.title) throw new HttpError(400, 'Название этапа не может быть пустым');
+      const clash = (db.getProject(name, { withTasks: false }) || { stages: [] }).stages
+        .find((s) => s.id !== Number(req.params.id) && s.title.toLowerCase() === patch.title.toLowerCase());
+      if (clash) throw new HttpError(400, `Этап «${patch.title}» уже есть`);
+    }
+    if (b.description !== undefined) patch.description = str(b.description, 4000).trim();
+    const status = parseStageStatus(b.status);
+    if (status) patch.status = status;
+    if (!Object.keys(patch).length) throw new HttpError(400, 'Нечего менять: передайте status, title или description');
+    const stage = db.updateStage(name, parseId(req.params.id), patch);
+    if (!stage) throw new HttpError(404, 'Этап не найден');
+    broadcast('project', name);
+    res.json(stage);
+  });
 
   app.post('/api/notes', (req, res, next) => {
     noteUpload(req, res, (err) => {
@@ -224,7 +335,11 @@ function createApp(options = {}) {
   app.get('/api/notes', (req, res) => {
     const status = optStr(req.query.status, 10);
     if (status && status !== 'open' && status !== 'done') throw new HttpError(400, 'status должен быть open или done');
-    res.json(db.listNotes({ project: optStr(req.query.project, 200), status }).map(serializeNote));
+    res.json(db.listNotes({
+      project: optStr(req.query.project, 200),
+      status,
+      excludeArchived: req.query.hide_archived === '1',
+    }).map(serializeNote));
   });
 
   app.patch('/api/notes/:id', (req, res) => {
@@ -236,6 +351,12 @@ function createApp(options = {}) {
     if (status !== undefined) {
       if (status !== 'open' && status !== 'done') throw new HttpError(400, 'status должен быть open или done');
       patch.status = status;
+      // кто закрыл правку: интерфейс дашборда передаёт "user", всё остальное (curl агента) — Claude
+      if (status === 'done') {
+        const by = String(b.done_by || 'claude').trim().toLowerCase();
+        if (by !== 'user' && by !== 'claude') throw new HttpError(400, 'done_by должен быть user или claude');
+        patch.done_by = by;
+      }
     }
     if (b.text !== undefined) patch.text = str(b.text, 50000).trim();
     if (b.project !== undefined) patch.project = requireProject(b.project);

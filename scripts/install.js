@@ -31,19 +31,33 @@ const CLAUDE_MD_BLOCK = `${MD_START}
 В конце каждой задачи отправь curl POST на localhost:${PORT}/api/tasks с кратким summary и статусом проекта. Выполненные правки отметь через PATCH.
 
 - \`project\` — имя корневой папки проекта (оно же указано в контексте дашборда в начале сессии), \`session_id\` — из того же контекста, если он есть.
-- \`task\` — исходный запрос пользователя в 1–2 фразах; \`summary\` — что сделано, кратко; \`files\` — изменённые файлы; \`status\` — состояние проекта одной строкой (что готово / что дальше).
+- \`task\` — исходный запрос пользователя в 1–2 фразах; \`summary\` — что сделано, кратко (можно Markdown); \`files\` — изменённые файлы; \`status\` — состояние проекта одной строкой (что готово / что дальше).
+- \`stage\` — точное название этапа проекта, к которому относится задача (этапы перечислены в контексте дашборда); \`progress\` — общая готовность проекта в процентах, 0–100.
+- Если у проекта ещё нет этапов — составь план из 3–7 этапов и отправь его PUT-запросом ниже. Когда этап завершён или план изменился — отправь PUT снова с полным списком и статусами (\`todo\` / \`active\` / \`done\`); описания уже существующих этапов можно не повторять.
 - Если сервер не отвечает — не повторяй запрос и не останавливайся из-за этого.
 
 \`\`\`bash
 curl -s -m 3 -X POST http://localhost:${PORT}/api/tasks -H 'Content-Type: application/json' --data-binary @- <<'JSON' || true
-{"project": "my-app", "session_id": "…", "task": "Добавить экспорт в CSV", "summary": "Кнопка экспорта + эндпоинт /export, тест на формат", "files": ["src/export.ts", "src/App.tsx"], "status": "MVP готов; дальше — авторизация"}
+{"project": "my-app", "session_id": "…", "task": "Добавить экспорт в CSV", "summary": "Кнопка экспорта + эндпоинт /export, тест на формат", "files": ["src/export.ts", "src/App.tsx"], "status": "MVP готов; дальше — авторизация", "stage": "Экспорт и отчёты", "progress": 60}
+JSON
+\`\`\`
+
+План этапов проекта:
+
+\`\`\`bash
+curl -s -m 3 -X PUT http://localhost:${PORT}/api/stages -H 'Content-Type: application/json' --data-binary @- <<'JSON' || true
+{"project": "my-app", "stages": [
+  {"title": "Прототип", "description": "Каркас приложения, роутинг, макеты экранов", "status": "done"},
+  {"title": "Экспорт и отчёты", "description": "CSV, PDF, фильтры по датам", "status": "active"},
+  {"title": "Авторизация", "description": "Вход, роли, восстановление пароля", "status": "todo"}
+]}
 JSON
 \`\`\`
 
 Открытые правки пользователя (текст, голос, скриншоты) приходят в контексте сессии с номерами. Выполненную правку отметь:
 
 \`\`\`bash
-curl -s -m 3 -X PATCH http://localhost:${PORT}/api/notes/<id> -H 'Content-Type: application/json' -d '{"status":"done"}' || true
+curl -s -m 3 -X PATCH http://localhost:${PORT}/api/notes/<id> -H 'Content-Type: application/json' -d '{"status":"done","done_by":"claude"}' || true
 \`\`\`
 ${MD_END}`;
 

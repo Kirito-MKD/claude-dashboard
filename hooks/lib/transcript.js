@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
-const MAX_TASK = 5000;
+const MAX_TASK = 20000;
 const MAX_SUMMARY = 4000;
 
 function readJsonl(file) {

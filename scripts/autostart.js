@@ -3,7 +3,8 @@
 /**
  * Автозапуск сервера дашборда при входе в систему.
  *
- *   node scripts/autostart.js            установить и сразу запустить
+ *   node scripts/autostart.js            установить и сразу запустить (уже запущенный дашборд
+ *                                        перезапускается — так подхватывается обновлённый код)
  *   node scripts/autostart.js --remove   убрать автозапуск и остановить сервер
  *   node scripts/autostart.js --print    только показать, что будет установлено
  *                             --print --platform=darwin|linux|win32   … для другой ОС
@@ -164,8 +165,7 @@ function windows() {
   const vbs = path.join(startup, 'agent-dashboard.vbs');
   if (REMOVE) {
     fs.rmSync(vbs, { force: true });
-    console.log(`✓ автозапуск убран (${vbs}).`);
-    console.log(`  Запущенный сервер остановится после выхода из системы; сейчас: откройте Диспетчер задач → node.exe (server.js).`);
+    console.log(`✓ автозапуск убран, сервер остановлен (${vbs})`);
     return;
   }
   const vq = (s) => `""${s.replace(/"/g, '')}""`;
@@ -180,18 +180,90 @@ sh.Run "${vq(NODE)} ${vq(SERVER)}", 0, False
   console.log('✓ сервер запущен и будет стартовать при каждом входе в Windows (папка «Автозагрузка»)');
 }
 
+// ---------- остановка уже запущенного дашборда ----------
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function health() {
+  try {
+    const res = await fetch(`http://127.0.0.1:${PORT}/api/health`, { signal: AbortSignal.timeout(1500) });
+    return res.ok ? await res.json() : null;
+  } catch {
+    return null;
+  }
+}
+
+// Наш ли сервер слушает порт: новая версия называет себя, первая отвечала ровно {"ok":true}
+const isDashboard = (h) => !!h && (h.app === 'agent-dashboard' || (h.ok === true && Object.keys(h).length === 1));
+
+// PID процесса, слушающего порт (для первой версии, которая не сообщала свой pid)
+function pidsOnPort() {
+  if (process.platform === 'win32') {
+    // столбцы: протокол, локальный адрес, внешний адрес, состояние, PID; состояние бывает
+    // локализовано, поэтому слушающий сокет узнаём по внешнему адресу 0.0.0.0:0 / [::]:0
+    const out = run('netstat', ['-ano', '-p', 'tcp'], { ignoreError: true }) || '';
+    return [...new Set(out.split(/\r?\n/).map((l) => l.trim().split(/\s+/))
+      .filter((c) => c.length >= 5 && c[1].endsWith(`:${PORT}`) && /^(0\.0\.0\.0|\[::\]):0$/.test(c[2]))
+      .map((c) => Number(c[c.length - 1])))];
+  }
+  const lsof = run('lsof', ['-nP', `-iTCP:${PORT}`, '-sTCP:LISTEN', '-t'], { ignoreError: true });
+  if (lsof) return lsof.split(/\s+/).filter(Boolean).map(Number);
+  const ss = run('ss', ['-ltnpH', `sport = :${PORT}`], { ignoreError: true }) || '';
+  return [...ss.matchAll(/pid=(\d+)/g)].map((m) => Number(m[1]));
+}
+
+async function stopRunningServer() {
+  const h = await health();
+  if (!h) return;
+  if (!isDashboard(h)) throw new Error(`порт ${PORT} занят другой программой — освободите его или задайте PORT`);
+  const pids = (h.pid ? [h.pid] : pidsOnPort()).filter((pid) => pid > 0 && pid !== process.pid);
+  if (!pids.length) {
+    console.log(`! дашборд на порту ${PORT} уже запущен, но его процесс найти не удалось — остановите его вручную`);
+    return;
+  }
+  for (const pid of pids) {
+    try { process.kill(pid); } catch { /* уже завершился */ }
+  }
+  for (let i = 0; i < 40; i++) {
+    if (!(await health())) {
+      console.log(`✓ остановлен запущенный дашборд (pid ${pids.join(', ')})`);
+      return;
+    }
+    await sleep(150);
+  }
+  console.log(`! дашборд (pid ${pids.join(', ')}) не остановился — закройте процесс node вручную`);
+}
+
+async function waitForStart() {
+  for (let i = 0; i < 40; i++) {
+    const h = await health();
+    if (h && h.app === 'agent-dashboard') return h;
+    await sleep(250);
+  }
+  return null;
+}
+
 function startDetached() {
   fs.mkdirSync(path.dirname(LOG), { recursive: true });
   const out = fs.openSync(LOG, 'a');
   spawn(NODE, [SERVER], { cwd: ROOT, detached: true, stdio: ['ignore', out, out], env: { ...process.env, PORT: String(PORT) } }).unref();
 }
 
-try {
+(async () => {
+  if (!PRINT) {
+    // сначала гасим менеджер автозапуска, чтобы он не поднял старый процесс обратно
+    if (PLATFORM === 'darwin') run('launchctl', ['bootout', `gui/${process.getuid()}/${LABEL}`], { ignoreError: true });
+    if (PLATFORM === 'linux' && hasSystemdUser()) run('systemctl', ['--user', 'stop', 'agent-dashboard.service'], { ignoreError: true });
+    await stopRunningServer();
+  }
   if (PLATFORM === 'darwin') mac();
   else if (PLATFORM === 'win32') windows();
   else linux();
-  if (!REMOVE && !PRINT) console.log(`\nДашборд: http://localhost:${PORT}`);
-} catch (e) {
+  if (!REMOVE && !PRINT) {
+    const h = await waitForStart();
+    if (h) console.log(`\n✓ Дашборд работает: http://localhost:${PORT} (версия ${h.version}, pid ${h.pid})`);
+    else console.log(`\n! Сервер не ответил за 10 с — посмотрите лог: ${LOG}`);
+  }
+})().catch((e) => {
   console.error('✗ ' + e.message);
   process.exit(1);
-}
+});
