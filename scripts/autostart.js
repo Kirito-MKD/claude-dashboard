@@ -80,7 +80,7 @@ function mac() {
   </array>
   <key>WorkingDirectory</key><string>${xmlEscape(ROOT)}</string>
   <key>EnvironmentVariables</key>
-  <dict><key>PORT</key><string>${PORT}</string></dict>
+  <dict><key>PORT</key><string>${PORT}</string><key>AGENT_DASHBOARD_SUPERVISED</key><string>1</string></dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
   <key>ThrottleInterval</key><integer>15</integer>
@@ -127,6 +127,7 @@ After=network.target
 ExecStart=${q(NODE)} ${q(SERVER)}
 WorkingDirectory=${ROOT}
 Environment=PORT=${PORT}
+Environment=AGENT_DASHBOARD_SUPERVISED=1
 Restart=on-failure
 RestartSec=5
 

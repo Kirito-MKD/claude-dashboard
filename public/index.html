@@ -33,6 +33,10 @@
     --grad: linear-gradient(90deg, #8b5cf6 0%, #ec4899 55%, #fb923c 100%);
     --radius: 12px;
     --blur: blur(18px) saturate(150%);
+    /* пружины в духе motion/react: лёгкий перелёт и мягкая посадка */
+    --spring: cubic-bezier(.3, 1.3, .5, 1);
+    --spring-soft: cubic-bezier(.25, 1.18, .45, 1);
+    --spring-pop: cubic-bezier(.34, 1.56, .64, 1);
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   }
   * { box-sizing: border-box; }
@@ -135,32 +139,68 @@
   }
   .project-status b { color: var(--sky); font-weight: 600; margin-right: 6px; }
 
-  /* ---------- шкала готовности ---------- */
-  .progress-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px 12px; margin-bottom: 18px; }
-  .pc-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  /* ---------- этапы: степпер (по мотивам Stepper03) ---------- */
+  .progress-card { border: 1px solid var(--border); border-radius: 16px; padding: 16px 20px 14px; margin-bottom: 18px; }
+  .pc-head { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
   .pc-title { font-weight: 600; color: var(--text-2); font-size: 13px; }
   .pc-percent { font-size: 22px; font-weight: 700; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; font-variant-numeric: tabular-nums; }
   .pc-head .ghost-btn { margin-left: auto; }
-  .stages { display: grid; grid-auto-columns: minmax(96px, 1fr); grid-auto-flow: column; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
-  .stage { background: none; border: none; padding: 0; text-align: left; min-width: 0; border-radius: 8px; outline: none; }
-  .seg { height: 10px; border-radius: 6px; background: rgba(196, 181, 253, .14); overflow: hidden; position: relative; transition: box-shadow .15s; }
-  /* заливка на всю ширину сегмента и обрезка по проценту — так градиент непрерывен через все этапы */
-  .seg i { position: absolute; inset: 0; background: var(--grad); background-size: var(--grad-size, 100%) 100%; background-position: var(--grad-pos, 0) 0; clip-path: inset(0 calc(100% - var(--fill, 0%)) 0 0 round 6px); }
-  .stage.active .seg { box-shadow: 0 0 0 1px rgba(245, 128, 189, .55), 0 0 12px rgba(236, 72, 153, .45); }
-  .stage.active .seg i::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .45), transparent); animation: shimmer 2.2s infinite; }
-  @keyframes shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
-  .stage-label { display: flex; gap: 5px; align-items: baseline; margin-top: 7px; font-size: 12px; color: var(--muted); padding: 2px 4px; border-radius: 6px; }
-  .stage-label .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .stage-label .mk { flex: none; font-size: 11px; }
-  .stage.done .stage-label { color: var(--text-2); }
-  .stage.done .mk { color: var(--ok); }
-  .stage.active .stage-label { color: var(--text); font-weight: 600; }
-  .stage.active .mk { color: var(--pink); }
-  .stage:hover .stage-label, .stage:focus-visible .stage-label { background: rgba(196, 181, 253, .1); color: var(--text); }
-  .stage.selected .stage-label { background: rgba(196, 181, 253, .16); color: var(--text); }
-  .stage.selected .seg { outline: 2px solid var(--violet); outline-offset: 2px; }
-  .stages-empty { color: var(--text-2); font-size: 13px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  .stage-detail { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px; }
+  .stepper-scroll { overflow-x: auto; margin: 0 -8px; padding: 2px 8px 4px; }
+  .stepper { position: relative; min-width: calc(var(--n) * 86px); --half: calc(50% / var(--n)); }
+  .st-track, .st-fill { position: absolute; top: 19px; height: 3px; left: var(--half); right: var(--half); border-radius: 3px; }
+  .st-track { background: rgba(196, 181, 253, .16); }
+  .st-fill {
+    background: var(--grad); transform-origin: left center; transform: scaleX(var(--p, 0));
+    transition: transform .95s var(--spring); box-shadow: 0 0 12px rgba(236, 72, 153, .45);
+  }
+  .st-dot {
+    position: absolute; z-index: 4; top: 20.5px; width: 9px; height: 9px; border-radius: 50%; pointer-events: none;
+    left: calc(var(--half) + var(--p, 0) * (100% - 2 * var(--half))); transform: translate(-50%, -50%);
+    background: #fff; box-shadow: 0 0 0 3px rgba(255, 255, 255, .16), 0 0 14px 2px rgba(255, 196, 150, .9);
+    transition: left .95s var(--spring-soft);
+  }
+  .st-steps { position: relative; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); }
+  .st-step { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0; --c: #8b5cf6; }
+  .st-node { position: relative; z-index: 3; width: 40px; height: 40px; border-radius: 50%; border: none; padding: 0; background: none; display: grid; place-items: center; cursor: pointer; outline: none; }
+  .st-node:focus-visible { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--violet); }
+  .st-bg { position: absolute; inset: 0; border-radius: 50%; background: rgba(28, 27, 64, .94); border: 1px solid var(--border-strong); transition: background .3s, border-color .3s, box-shadow .3s; }
+  .st-step.todo .st-node:hover .st-bg { background: rgba(52, 48, 104, .96); }
+  .st-step.done .st-bg, .st-step.active .st-bg { background: var(--c); border-color: transparent; }
+  .st-step.active .st-bg { box-shadow: 0 0 20px color-mix(in srgb, var(--c) 75%, transparent); }
+  .st-ring { position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 65%, transparent); animation: st-pulse 1.1s ease-in-out infinite alternate; }
+  @keyframes st-pulse { from { transform: scale(1); opacity: 1; } to { transform: scale(1.45); opacity: .2; } }
+  .st-inner { position: relative; display: grid; place-items: center; transition: transform .45s var(--spring-pop); color: var(--muted); }
+  .st-step.viewing .st-inner { transform: scale(1.12); }
+  .st-step.done .st-inner, .st-step.active .st-inner { color: #fff; }
+  .st-inner svg { width: 19px; height: 19px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .st-step.done .st-inner svg { stroke-width: 3; }
+  .st-inner.pop svg { animation: st-check .55s var(--spring-pop) var(--d, 0ms) both; }
+  .st-inner.appear svg { animation: st-icon .45s var(--spring-pop) var(--d, 0ms) both; }
+  @keyframes st-check { from { transform: scale(0) rotate(-90deg); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes st-icon { from { transform: scale(0); opacity: 0; } to { transform: none; opacity: 1; } }
+  .st-label {
+    font-size: 12px; font-weight: 500; color: var(--muted); text-align: center; max-width: 100%; padding: 0 4px; line-height: 1.3;
+    overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; transition: color .3s; cursor: pointer;
+  }
+  .st-step.done .st-label, .st-step.active .st-label { color: var(--text-2); }
+  .st-step.viewing .st-label { color: #fff; font-weight: 650; }
+  .st-content { min-height: 96px; margin-top: 20px; }
+  .st-sep { height: 1px; background: var(--border); margin: 14px 0 12px; }
+  .st-nav { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .st-nav .count { color: var(--muted); font-size: 12.5px; }
+  .st-nav .btn svg, .st-nav .ghost-btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .st-nav button:disabled { opacity: .45; cursor: default; filter: none; box-shadow: none; }
+  .stages-empty { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+  .ghost-steps { display: flex; align-items: center; flex: none; }
+  .ghost-steps span { width: 26px; height: 26px; border-radius: 50%; border: 2px dashed rgba(196, 181, 253, .35); }
+  .ghost-steps i { width: 26px; height: 0; border-top: 2px dashed rgba(196, 181, 253, .25); }
+  .stages-empty .t { font-weight: 600; }
+  .stages-empty .row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  @media (prefers-reduced-motion: reduce) {
+    .st-ring { animation: none; }
+    .st-fill, .st-dot, .st-inner { transition: none; }
+    .st-inner.pop svg, .st-inner.appear svg { animation: none; }
+  }
   .sd-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .sd-num { color: var(--muted); font-size: 12px; }
   .sd-title { font-weight: 650; font-size: 15px; }
@@ -168,7 +208,7 @@
   .st-pill.done { background: var(--ok-soft); color: var(--ok); }
   .st-pill.active { background: var(--pink-soft); color: var(--pink); }
   .st-pill.todo { background: rgba(196, 181, 253, .12); color: var(--muted); }
-  .sd-actions { margin-left: auto; display: flex; gap: 6px; }
+  .sd-actions { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
   .sd-block { margin-top: 10px; }
   .sd-label { font-size: 11.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
   .sd-tasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
@@ -326,6 +366,20 @@
   details.done-list summary { cursor: pointer; color: var(--muted); font-size: 12.5px; margin: 14px 0 8px; user-select: none; }
   .notes-empty { color: var(--muted); font-size: 12.5px; padding: 6px 2px; }
 
+  /* ---------- плашка: сервер устарел ---------- */
+  /* в потоке ленты (а не поверх), чтобы не закрывать кнопки шапки проекта */
+  .server-banner {
+    position: sticky; top: 0; z-index: 6; margin-bottom: 14px; flex-wrap: wrap;
+    display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 12px;
+    background: rgba(46, 24, 34, .9); border: 1px solid rgba(255, 207, 138, .5); color: #ffe6c4;
+    backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); box-shadow: 0 12px 40px rgba(0, 0, 0, .5);
+    animation: banner-in .45s var(--spring-pop);
+  }
+  @keyframes banner-in { from { opacity: 0; transform: translateY(-10px); } }
+  .server-banner .msg { flex: 1 1 260px; font-size: 13px; }
+  .server-banner code { font-family: var(--mono); background: rgba(0, 0, 0, .35); padding: 1px 6px; border-radius: 5px; color: #fff; }
+  .server-banner .btn { flex: none; }
+
   /* ---------- оверлеи ---------- */
   #drop { position: fixed; inset: 0; background: rgba(10, 11, 30, .82); border: 3px dashed var(--pink); display: none; place-items: center; z-index: 50; font-size: 18px; pointer-events: none; }
   #drop.show { display: grid; }
@@ -350,6 +404,7 @@
   .modal .sub { color: var(--muted); font-size: 12.5px; margin-bottom: 12px; }
   .se-row { display: grid; grid-template-columns: 128px minmax(0, 1fr) auto; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; background: rgba(8, 8, 24, .3); }
   .se-row textarea { grid-column: 2 / 3; resize: vertical; min-height: 38px; font-size: 13px; }
+  .se-row .se-icon { grid-column: 1; grid-row: 2; align-self: start; font-size: 13px; }
   .se-row .se-tools { grid-row: 1 / 3; grid-column: 3; display: flex; flex-direction: column; gap: 2px; }
   .se-progress { display: flex; align-items: center; gap: 8px; margin: 12px 0 4px; color: var(--text-2); font-size: 13px; }
   .se-progress input { width: 90px !important; }
@@ -381,6 +436,7 @@
     .se-row select { grid-column: 1; }
     .se-row input { grid-column: 1; }
     .se-row textarea { grid-column: 1; }
+    .se-row .se-icon { grid-column: 1; grid-row: auto; }
     .se-row .se-tools { grid-row: 1 / 4; grid-column: 2; }
   }
 </style>
@@ -397,7 +453,12 @@
 <div class="layout">
   <aside id="projects" class="glass" aria-label="Проекты"></aside>
   <div class="main-col">
-    <section id="feed" aria-label="Лента задач"></section>
+    <section id="feed" aria-label="Лента задач">
+      <div id="server-banner" class="server-banner" role="alert" hidden></div>
+      <div id="feed-head"></div>
+      <div id="project-progress" hidden></div>
+      <div id="feed-list"></div>
+    </section>
     <section id="notes" class="glass" aria-label="Правки">
       <h2>Правки <span class="pill notes" id="notes-count" hidden></span></h2>
       <form class="composer" id="composer" autocomplete="off">
@@ -428,13 +489,14 @@
   <form method="dialog" id="stage-form">
     <div class="modal-body">
       <h3 id="se-title">Этапы проекта</h3>
-      <div class="sub">Этапы показываются на шкале готовности. Claude видит их в начале сессии и привязывает к ним задачи.</div>
+      <div class="sub">Этапы показываются на шкале готовности. Claude видит их в начале сессии и привязывает к ним задачи. Иконка «Авто» подбирается по названию.</div>
       <div id="se-rows"></div>
       <button type="button" class="btn" id="se-add">+ Добавить этап</button>
       <label class="se-progress">Готовность проекта:
         <input type="number" id="se-progress" min="0" max="100" placeholder="авто"> %
         <span class="muted">— пусто: считать по этапам</span>
       </label>
+      <label class="se-progress"><input type="checkbox" id="se-skip"> Не требовать план от агентов для этого проекта</label>
     </div>
     <div class="modal-actions">
       <button type="button" class="btn" id="se-cancel">Отмена</button>
@@ -673,8 +735,78 @@ async function api(path, opts = {}) {
   const res = await fetch(path, opts);
   if (res.status === 204) return null;
   const body = await res.json().catch(() => ({}));
+  if (res.status === 404 && body.error === 'Нет такого API') {
+    // интерфейс новее запущенного сервера: старый процесс не знает этот адрес
+    showServerBanner('old');
+    throw new Error('Сервер дашборда устарел — перезапустите его: npm run restart в папке дашборда');
+  }
   if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
   return body;
+}
+
+// ---------- версия сервера ----------
+// Уровень API, который нужен этому интерфейсу. Совпадает с API_LEVEL в server.js (проверяется тестом).
+const UI_API_LEVEL = 3;
+let serverInfo = null;
+
+function showServerBanner(kind) {
+  const banner = $('#server-banner');
+  if (banner.dataset.kind === kind && !banner.hidden) return;
+  banner.dataset.kind = kind;
+  const copyBtn = el('button', { class: 'ghost-btn', type: 'button', onclick: () => navigator.clipboard?.writeText('npm run restart').then(() => toast('Команда скопирована')) }, 'Скопировать команду');
+  if (kind === 'old') {
+    banner.replaceChildren(
+      el('div', { class: 'msg' }, 'Запущена старая версия сервера дашборда — закрепление, архив и этапы не заработают, пока его не перезапустить. В папке дашборда выполните ', el('code', {}, 'npm run restart'), '.'),
+      copyBtn,
+    );
+  } else {
+    const btn = el('button', { class: 'btn primary', type: 'button', onclick: () => restartServer(btn) }, 'Перезапустить сервер');
+    banner.replaceChildren(
+      el('div', { class: 'msg' }, `Код дашборда обновлён до версии ${serverInfo && serverInfo.disk_version}, а сервер ещё работает со старой (${serverInfo && serverInfo.version}).`),
+      serverInfo && serverInfo.can_restart ? btn : copyBtn,
+    );
+  }
+  banner.hidden = false;
+}
+function hideServerBanner() { $('#server-banner').hidden = true; }
+
+async function fetchHealth() {
+  try {
+    const res = await fetch('/api/health', { cache: 'no-store' });
+    return res.ok ? await res.json() : null;
+  } catch {
+    return null;
+  }
+}
+
+async function checkServer() {
+  const h = await fetchHealth();
+  if (!h) return;
+  serverInfo = h;
+  if (h.api > UI_API_LEVEL && !sessionStorage.getItem('reloadedForApi' + h.api)) {
+    // сервер новее открытой страницы — подтягиваем свежий интерфейс один раз
+    sessionStorage.setItem('reloadedForApi' + h.api, '1');
+    location.reload();
+    return;
+  }
+  if (!h.api || h.api < UI_API_LEVEL) showServerBanner('old');
+  else if (h.stale) showServerBanner('stale');
+  else hideServerBanner();
+}
+
+async function restartServer(btn) {
+  btn.disabled = true;
+  btn.textContent = 'Перезапускаю…';
+  const oldPid = serverInfo && serverInfo.pid;
+  try { await api('/api/restart', { method: 'POST' }); } catch (e) { toast(e.message, true); }
+  for (let i = 0; i < 60; i++) {
+    await new Promise((r) => setTimeout(r, 500));
+    const h = await fetchHealth();
+    if (h && h.pid !== oldPid) { location.reload(); return; }
+  }
+  btn.disabled = false;
+  btn.textContent = 'Перезапустить сервер';
+  toast('Сервер не поднялся за 30 секунд — выполните npm run restart в папке дашборда', true);
 }
 const jsonBody = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 const projectUrl = (name, rest = '') => `/api/projects/${encodeURIComponent(name)}${rest}`;
@@ -789,7 +921,6 @@ const state = {
   projects: [],
   detail: null,       // подробности выбранного проекта (этапы)
   detailLoading: false,
-  stageId: null,      // открытый на шкале этап
   tasks: [],
   hasMore: false,
   notes: [],
@@ -812,9 +943,9 @@ function defaultNoteProject() {
   return state.project || (lastP && !lastP.archived ? last : '') || (firstActive && firstActive.name) || last || '';
 }
 function applyProject(name, stageId = null) {
-  if (name !== state.project) { state.tasks = []; state.detail = null; state.detailLoading = !!name; }
+  if (name !== state.project) { state.tasks = []; state.detail = null; state.detailLoading = !!name; stepper.view = null; }
   state.project = name;
-  state.stageId = stageId;
+  if (stageId) stepper.view = stageId;
   if (name || !$('#note-project').value) $('#note-project').value = defaultNoteProject();
   renderProjects();
   renderFeed();
@@ -844,7 +975,6 @@ async function loadDetail() {
   if (req !== detailReq) return;
   state.detail = detail;
   state.detailLoading = false;
-  if (state.stageId && !(detail && detail.stages.some((s) => s.id === state.stageId))) state.stageId = null;
   renderFeed();
 }
 
@@ -970,9 +1100,92 @@ function renderProjects() {
   box.replaceChildren(...nodes);
 }
 
-// ============ шкала готовности и этапы ============
-const STAGE_MARK = { done: '✓', active: '▶', todo: '○' };
+// ============ этапы: степпер (по мотивам Stepper03) ============
 const STAGE_WORD = { done: 'завершён', active: 'в работе', todo: 'впереди' };
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+// Иконки lucide (статичная разметка)
+const STAGE_ICONS = {
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  lightbulb: '<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/>',
+  layout: '<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>',
+  code: '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
+  database: '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/>',
+  flask: '<path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/>',
+  cart: '<circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/>',
+  card: '<rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>',
+  wrench: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
+  cpu: '<rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/>',
+  shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
+  rocket: '<path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>',
+  file: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+  package: '<path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>',
+  upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>',
+  zap: '<path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>',
+  flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/>',
+  user: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  chevronLeft: '<path d="m15 18-6-6 6-6"/>',
+  chevronRight: '<path d="m9 18 6-6-6-6"/>',
+};
+const ICON_LABELS = {
+  '': 'Авто', lightbulb: 'Идея', layout: 'Интерфейс', code: 'Код', database: 'Данные', flask: 'Тесты', cart: 'Закупка',
+  card: 'Оплата', wrench: 'Сборка', cpu: 'Электроника', shield: 'Безопасность', rocket: 'Релиз', file: 'Документы',
+  package: 'Корпус / упаковка', upload: 'Загрузка', zap: 'Скорость', flag: 'Финиш', user: 'Пользователи', settings: 'Настройка', search: 'Исследование',
+};
+// Автоподбор иконки по названию этапа
+const ICON_RULES = [
+  [/оплат|платёж|платеж|касс|pay|billing|checkout/i, 'card'],
+  [/закуп|покуп|деталей|комплектующ|заказ|purchase|buy|корзин|cart|shop|магазин/i, 'cart'],
+  [/тест|qa|отлад|debug|test|провер/i, 'flask'],
+  [/деплой|релиз|публикац|запуск|выпуск|deploy|release|launch|прод/i, 'rocket'],
+  [/безопас|авториз|аутентиф|auth|login|вход|security|доступ|рол/i, 'shield'],
+  [/прошив|firmware|микроконтр|электрон|схем|плат|pcb|hardware|железо/i, 'cpu'],
+  [/пайк|сборк|монтаж|assembl|solder|ремонт|fix|настройк оборуд/i, 'wrench'],
+  [/данн|баз|database|\bdb\b|миграц|migrat|хранил/i, 'database'],
+  [/дизайн|макет|интерфейс|вёрстк|верстк|экран|\bui\b|\bux\b|design|mockup|layout|frontend|фронт/i, 'layout'],
+  [/иде|концеп|исслед|анализ|ресерч|требован|research|idea|concept|discover|\bтз\b|постановк/i, 'lightbulb'],
+  [/поиск|search/i, 'search'],
+  [/документ|docs|readme|инструкц|описан|отчёт|отчет/i, 'file'],
+  [/корпус|упаков|package|печат|3d/i, 'package'],
+  [/загруз|upload|импорт|import|экспорт|export|интеграц/i, 'upload'],
+  [/оптимиз|производит|perf|скорост|кеш|cache/i, 'zap'],
+  [/пользоват|профил|аккаунт|account|profile|клиент/i, 'user'],
+  [/настро|конфиг|setup|config|инфраструкт|окружен/i, 'settings'],
+  [/код|разработ|реализ|backend|бэкенд|бекенд|\bapi\b|сервер|логик|implement|прототип|mvp|каркас|функционал/i, 'code'],
+  [/финал|финиш|итог|сдач|заверш|finish|done|полиров/i, 'flag'],
+];
+const ICON_FALLBACK = ['lightbulb', 'layout', 'code', 'flask', 'rocket', 'flag'];
+function stageIconName(stage, i) {
+  if (stage.icon && STAGE_ICONS[stage.icon] && stage.icon !== 'check') return stage.icon;
+  for (const [re, name] of ICON_RULES) if (re.test(stage.title)) return name;
+  return ICON_FALLBACK[i % ICON_FALLBACK.length];
+}
+const svgMarkup = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${STAGE_ICONS[name]}</svg>`;
+function svgEl(name) {
+  const span = document.createElement('span');
+  span.innerHTML = svgMarkup(name);
+  return span.firstChild;
+}
+
+// Цвет этапа — точка на градиенте заката (фиолетовый → розовый → оранжевый)
+const GRAD_STOPS = [[0, [139, 92, 246]], [0.55, [236, 72, 153]], [1, [251, 146, 60]]];
+function gradAt(t) {
+  for (let k = 1; k < GRAD_STOPS.length; k++) {
+    const [t1, c1] = GRAD_STOPS[k];
+    const [t0, c0] = GRAD_STOPS[k - 1];
+    if (t <= t1) {
+      const f = (t - t0) / (t1 - t0 || 1);
+      return `rgb(${c0.map((v, j) => Math.round(v + (c1[j] - v) * f)).join(', ')})`;
+    }
+  }
+  return `rgb(${GRAD_STOPS[GRAD_STOPS.length - 1][1].join(', ')})`;
+}
+
+// Степпер живёт в постоянном контейнере #project-progress и обновляется на месте,
+// поэтому линия, точка и иконки анимируются между состояниями, а не рисуются заново.
+const stepper = { key: '', view: null, contentKey: '', shownPercent: null, anim: 0 };
 
 function setStageStatus(stage, status) {
   return api(projectUrl(state.project, `/stages/${stage.id}`), jsonBody('PATCH', { status }))
@@ -980,21 +1193,26 @@ function setStageStatus(stage, status) {
     .catch((e) => toast(e.message, true));
 }
 
-function stageDetail(stage, index, total) {
+function currentStageIndex(stages) {
+  const active = stages.findIndex((s) => s.status === 'active');
+  if (active >= 0) return active;
+  const todo = stages.findIndex((s) => s.status === 'todo');
+  return todo >= 0 ? todo : stages.length - 1;
+}
+
+function stageContent(stage, index, total) {
   const tasks = stage.tasks || [];
-  const actions = el('div', { class: 'sd-actions' },
-    stage.status !== 'done' && el('button', { class: 'ghost-btn', type: 'button', onclick: () => setStageStatus(stage, 'done') }, '✓ Завершить'),
-    stage.status !== 'active' && el('button', { class: 'ghost-btn', type: 'button', onclick: () => setStageStatus(stage, 'active') }, '▶ В работу'),
-    stage.status === 'active' && el('button', { class: 'ghost-btn', type: 'button', onclick: () => setStageStatus(stage, 'todo') }, '○ Отложить'),
-    el('button', { class: 'icon-btn', type: 'button', title: 'Закрыть', onclick: () => { state.stageId = null; renderFeed(); } }, icon('close')),
-  );
-  return el('div', { class: 'stage-detail', id: 'stage-detail' },
+  return el('div', {},
     el('div', { class: 'sd-head' },
       el('span', { class: 'sd-num' }, `Этап ${index + 1} из ${total}`),
       el('span', { class: 'sd-title' }, stage.title),
       el('span', { class: 'st-pill ' + stage.status }, STAGE_WORD[stage.status]),
       stage.completed_at && el('span', { class: 'muted', style: { fontSize: '12px' } }, 'завершён ', timeEl(stage.completed_at, 'date')),
-      actions,
+      el('div', { class: 'sd-actions' },
+        stage.status !== 'done' && el('button', { class: 'ghost-btn', type: 'button', onclick: () => setStageStatus(stage, 'done') }, '✓ Завершить'),
+        stage.status !== 'active' && el('button', { class: 'ghost-btn', type: 'button', onclick: () => setStageStatus(stage, 'active') }, '▶ В работу'),
+        stage.status === 'active' && el('button', { class: 'ghost-btn', type: 'button', onclick: () => setStageStatus(stage, 'todo') }, '○ Отложить'),
+      ),
     ),
     el('div', { class: 'sd-block' },
       el('div', { class: 'sd-label' }, 'Задачи этапа'),
@@ -1014,52 +1232,190 @@ function stageDetail(stage, index, total) {
   );
 }
 
-function progressCard(detail) {
-  if (state.detailLoading) {
-    return el('section', { class: 'progress-card glass', 'aria-busy': 'true' },
-      el('div', { class: 'pc-head' }, el('span', { class: 'pc-title' }, 'Готовность проекта'), el('span', { class: 'muted' }, 'загрузка…')));
-  }
-  const stages = detail ? detail.stages : [];
-  const progress = detail && detail.progress !== null && detail.progress !== undefined ? detail.progress : null;
-  const head = el('div', { class: 'pc-head' },
+function stepperHead(detail) {
+  const has = detail && detail.stages && detail.stages.length;
+  return el('div', { class: 'pc-head' },
     el('span', { class: 'pc-title' }, 'Готовность проекта'),
-    progress !== null && el('span', { class: 'pc-percent' }, progress + '%'),
-    el('button', { class: 'ghost-btn', type: 'button', onclick: () => openStageEditor() }, icon('edit'), stages.length ? 'Этапы' : 'Задать этапы'),
+    el('span', { class: 'pc-percent', id: 'pc-percent' }),
+    detail && el('button', { class: 'ghost-btn', type: 'button', onclick: () => openStageEditor() }, icon('edit'), has ? 'Этапы' : 'Задать этапы'),
   );
-  const card = el('section', { class: 'progress-card glass', 'aria-label': 'Готовность проекта' }, head);
+}
+
+function emptyStages(detail) {
+  const skipped = detail && detail.plan_skipped;
+  const name = state.project;
+  return el('div', { class: 'stages-empty' },
+    el('div', { class: 'ghost-steps', 'aria-hidden': 'true' }, el('span'), el('i'), el('span'), el('i'), el('span')),
+    el('div', {},
+      el('div', { class: 't' }, skipped ? 'План для проекта отключён' : 'Плана этапов пока нет'),
+      el('div', { class: 'muted' }, skipped
+        ? 'Вы попросили обходиться без плана — агенты не будут его составлять.'
+        : 'Claude обязан составить план, как только поработает с файлами проекта (хук Stop), — или задайте этапы сами.'),
+      el('div', { class: 'row' },
+        el('button', { class: 'btn primary', type: 'button', onclick: () => openStageEditor() }, 'Задать этапы'),
+        skipped
+          ? el('button', { class: 'ghost-btn', type: 'button', onclick: () => updateProject(name, { plan_skipped: false }, 'План для проекта снова обязателен') }, 'Снова требовать план')
+          : el('button', { class: 'ghost-btn', type: 'button', onclick: () => updateProject(name, { plan_skipped: true }, 'План для проекта больше не требуется') }, 'Не требовать план'),
+      ),
+    ),
+  );
+}
+
+function buildStepper(host, detail) {
+  const stages = (detail && detail.stages) || [];
+  const card = el('section', { class: 'progress-card glass', 'aria-label': 'Этапы проекта' }, stepperHead(detail));
+  stepper.contentKey = '';
+  stepper.shownPercent = null;
   if (!stages.length) {
-    card.append(el('div', { class: 'stages-empty' },
-      el('span', {}, 'Этапов пока нет. Claude составит план при следующей задаче (инструкция в CLAUDE.md) — или задайте этапы сами.')));
-    return card;
+    if (detail || !state.detailLoading) card.append(emptyStages(detail));
+    host.replaceChildren(card);
+    return;
   }
-  // Заполнение шкалы идёт по проценту, сегменты — этапы
   const n = stages.length;
-  const filled = progress !== null ? (progress / 100) * n : stages.filter((s) => s.status === 'done').length;
-  const bar = el('div', { class: 'stages', role: 'list' }, stages.map((s, i) => {
-    const fill = Math.max(0, Math.min(1, filled - i)) * 100;
-    const btn = el('button', {
-      class: `stage ${s.status}${state.stageId === s.id ? ' selected' : ''}`, type: 'button', role: 'listitem',
-      title: `${s.title} — ${STAGE_WORD[s.status]}`, 'aria-expanded': state.stageId === s.id ? 'true' : 'false',
-      onclick: () => { state.stageId = state.stageId === s.id ? null : s.id; renderFeed(); },
-    },
-      el('div', { class: 'seg' }, el('i')),
-      el('div', { class: 'stage-label' }, el('span', { class: 'mk' }, STAGE_MARK[s.status]), el('span', { class: 't' }, s.title)),
+  const steps = el('div', { class: 'st-steps' }, stages.map((s, i) => {
+    const step = el('div', { class: 'st-step', dataset: { id: s.id } },
+      el('button', { class: 'st-node', type: 'button', 'aria-label': `Этап ${i + 1}: ${s.title}`, onclick: () => setStepperView(s.id) },
+        el('span', { class: 'st-bg' }), el('span', { class: 'st-inner' })),
+      el('span', { class: 'st-label', title: s.title, onclick: () => setStepperView(s.id) }, s.title),
     );
-    // CSS-переменные через setProperty — Object.assign их не выставляет
-    const fillEl = btn.querySelector('.seg i');
-    fillEl.style.setProperty('--fill', fill + '%');
-    fillEl.style.setProperty('--grad-size', n * 100 + '%');
-    fillEl.style.setProperty('--grad-pos', (n > 1 ? (i / (n - 1)) * 100 : 0) + '%');
-    return btn;
+    step.style.setProperty('--c', gradAt(n > 1 ? i / (n - 1) : 0));
+    return step;
   }));
-  card.append(bar);
-  const idx = stages.findIndex((s) => s.id === state.stageId);
-  if (idx >= 0) card.append(stageDetail(stages[idx], idx, n));
-  return card;
+  const line = el('div', { class: 'stepper' }, el('div', { class: 'st-track' }), el('div', { class: 'st-fill' }), el('span', { class: 'st-dot' }), steps);
+  line.style.setProperty('--n', n);
+  line.style.setProperty('--p', 0); // при первом показе линия «вырастает» от первого этапа
+  const nav = el('div', { class: 'st-nav' },
+    el('button', { class: 'ghost-btn', type: 'button', id: 'st-prev', onclick: () => stepView(-1) }, svgEl('chevronLeft'), 'Назад'),
+    el('span', { class: 'count', id: 'st-count' }),
+    el('button', { class: 'btn primary', type: 'button', id: 'st-next', onclick: () => stepView(1) }, 'Далее', svgEl('chevronRight')),
+  );
+  card.append(el('div', { class: 'stepper-scroll' }, line), el('div', { class: 'st-content', id: 'st-content', 'aria-live': 'polite' }), el('div', { class: 'st-sep' }), nav);
+  host.replaceChildren(card);
+}
+
+function applyStepper(detail, rebuilt) {
+  const host = $('#project-progress');
+  const stages = detail.stages;
+  const n = stages.length;
+  if (stepper.view === null || !stages.some((s) => s.id === stepper.view)) stepper.view = stages[currentStageIndex(stages)].id;
+  const viewIdx = stages.findIndex((s) => s.id === stepper.view);
+  const motion = !reduceMotion.matches;
+
+  // линия и бегущая точка: доля готовности проекта от первого до последнего этапа
+  const progress = detail.progress !== null && detail.progress !== undefined ? detail.progress : 0;
+  const line = host.querySelector('.stepper');
+  const p = Math.max(0, Math.min(1, progress / 100));
+  if (rebuilt && motion) requestAnimationFrame(() => requestAnimationFrame(() => line.style.setProperty('--p', p)));
+  else line.style.setProperty('--p', p);
+
+  stages.forEach((s, i) => {
+    const step = host.querySelector(`.st-step[data-id="${s.id}"]`);
+    step.classList.remove('done', 'active', 'todo');
+    step.classList.add(s.status);
+    step.classList.toggle('viewing', s.id === stepper.view);
+    const node = step.querySelector('.st-node');
+    if (s.id === stepper.view) node.setAttribute('aria-current', 'step'); else node.removeAttribute('aria-current');
+    node.title = `${s.title} — ${STAGE_WORD[s.status]}`;
+    const inner = step.querySelector('.st-inner');
+    const want = s.status === 'done' ? 'check' : stageIconName(s, i);
+    if (inner.dataset.icon !== want) {
+      inner.innerHTML = svgMarkup(want);
+      inner.dataset.icon = want;
+      inner.classList.remove('pop', 'appear');
+      void inner.offsetWidth; // перезапуск CSS-анимации
+      inner.style.setProperty('--d', rebuilt ? `${120 + i * 70}ms` : '0ms');
+      if (motion) inner.classList.add(want === 'check' ? 'pop' : 'appear');
+    }
+    // пульсирующее кольцо вокруг текущего этапа
+    const ring = node.querySelector('.st-ring');
+    if (s.status === 'active' && !ring) node.prepend(el('span', { class: 'st-ring' }));
+    if (s.status !== 'active' && ring) ring.remove();
+  });
+
+  host.querySelector('#st-prev').disabled = viewIdx === 0;
+  host.querySelector('#st-next').disabled = viewIdx === n - 1;
+  host.querySelector('#st-count').textContent = `Этап ${viewIdx + 1} из ${n}`;
+
+  // содержимое выбранного этапа: уезжает вверх, новое въезжает снизу (AnimatePresence mode="wait")
+  const s = stages[viewIdx];
+  const key = [s.id, s.status, s.title, s.description, (s.tasks || []).map((t) => t.id).join(','), s.completed_at].join('|');
+  if (key === stepper.contentKey) return;
+  const sameStage = stepper.contentKey.split('|')[0] === String(s.id);
+  stepper.contentKey = key;
+  const box = host.querySelector('#st-content');
+  const fresh = stageContent(s, viewIdx, n);
+  const token = ++stepper.anim;
+  const enter = () => {
+    if (token !== stepper.anim) return;
+    box.replaceChildren(fresh);
+    if (motion && !sameStage) fresh.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: 220, easing: 'cubic-bezier(.2, .8, .2, 1)' });
+  };
+  const old = box.firstChild;
+  if (old && motion && !sameStage) {
+    old.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(-8px)' }], { duration: 130, easing: 'ease-in', fill: 'forwards' })
+      .finished.then(enter, enter);
+  } else enter();
+}
+
+// Процент в шапке плавно «досчитывает» до нового значения
+function updatePercent(detail) {
+  const elp = $('#pc-percent');
+  if (!elp) return;
+  const target = detail && detail.progress !== null && detail.progress !== undefined ? detail.progress : null;
+  if (target === null) { elp.textContent = ''; stepper.shownPercent = null; return; }
+  const from = stepper.shownPercent === null ? 0 : stepper.shownPercent;
+  stepper.shownPercent = target;
+  if (reduceMotion.matches || from === target) { elp.textContent = target + '%'; return; }
+  const start = performance.now();
+  const dur = 700;
+  const tick = (now) => {
+    const k = Math.min(1, (now - start) / dur);
+    const eased = 1 - Math.pow(1 - k, 3);
+    elp.textContent = Math.round(from + (target - from) * eased) + '%';
+    if (k < 1 && stepper.shownPercent === target) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+function renderStepper() {
+  const host = $('#project-progress');
+  if (!state.project) {
+    host.hidden = true;
+    host.replaceChildren();
+    stepper.key = '';
+    return;
+  }
+  host.hidden = false;
+  if (state.detailLoading) {
+    if (stepper.key !== `loading|${state.project}`) {
+      host.replaceChildren(el('section', { class: 'progress-card glass', 'aria-busy': 'true' },
+        el('div', { class: 'pc-head', style: { marginBottom: '0' } }, el('span', { class: 'pc-title' }, 'Готовность проекта'), el('span', { class: 'muted' }, 'загрузка…'))));
+      stepper.key = `loading|${state.project}`;
+    }
+    return;
+  }
+  const detail = state.detail;
+  const stages = (detail && detail.stages) || [];
+  const key = `${state.project}|${stages.map((s) => `${s.id}:${s.title}:${s.icon || ''}`).join(',')}|${detail && detail.plan_skipped ? 'skip' : ''}|${detail ? 1 : 0}`;
+  const rebuilt = key !== stepper.key;
+  if (rebuilt) { buildStepper(host, detail); stepper.key = key; }
+  if (stages.length) applyStepper(detail, rebuilt);
+  updatePercent(detail);
+}
+
+function setStepperView(id) {
+  stepper.view = id;
+  if (state.detail && state.detail.stages.length) applyStepper(state.detail, false);
+}
+function stepView(delta) {
+  const stages = (state.detail && state.detail.stages) || [];
+  const i = stages.findIndex((s) => s.id === stepper.view);
+  const next = stages[Math.max(0, Math.min(stages.length - 1, i + delta))];
+  if (next) setStepperView(next.id);
 }
 
 // ---------- редактор этапов ----------
-function stageRow(s = { title: '', description: '', status: 'todo' }) {
+function stageRow(s = { title: '', description: '', status: 'todo', icon: '' }) {
   const row = el('div', { class: 'se-row', dataset: { id: s.id || '' } },
     el('select', { 'aria-label': 'Статус' },
       el('option', { value: 'todo' }, '○ Впереди'),
@@ -1071,9 +1427,12 @@ function stageRow(s = { title: '', description: '', status: 'todo' }) {
       el('button', { class: 'icon-btn', type: 'button', title: 'Ниже', onclick: () => row.nextElementSibling && row.nextElementSibling.after(row) }, icon('down')),
       el('button', { class: 'icon-btn danger', type: 'button', title: 'Удалить этап', onclick: () => row.remove() }, icon('close')),
     ),
+    el('select', { class: 'se-icon', 'aria-label': 'Иконка этапа' },
+      Object.entries(ICON_LABELS).map(([value, label]) => el('option', { value }, label))),
     el('textarea', { rows: '2', placeholder: 'Что входит в этап (можно Markdown)', 'aria-label': 'Описание этапа' }),
   );
   row.querySelector('select').value = s.status;
+  row.querySelector('.se-icon').value = s.icon && ICON_LABELS[s.icon] ? s.icon : '';
   row.querySelector('textarea').value = s.description || '';
   return row;
 }
@@ -1085,6 +1444,7 @@ function openStageEditor() {
   $('#se-rows').replaceChildren(...(stages.length ? stages.map(stageRow) : [stageRow(), stageRow(), stageRow()]));
   const reported = state.detail ? state.detail.reported_progress : null;
   $('#se-progress').value = reported === null || reported === undefined ? '' : reported;
+  $('#se-skip').checked = !!(state.detail && state.detail.plan_skipped);
   $('#stage-editor').showModal();
   const firstInput = $('#se-rows input');
   if (firstInput && !firstInput.value) firstInput.focus();
@@ -1098,10 +1458,13 @@ $('#stage-form').addEventListener('submit', async (e) => {
     title: row.querySelector('input').value.trim(),
     description: row.querySelector('textarea').value.trim(),
     status: row.querySelector('select').value,
+    icon: row.querySelector('.se-icon').value,
   })).filter((s) => s.title);
   const raw = $('#se-progress').value.trim();
   try {
-    await api(projectUrl(state.project, '/stages'), jsonBody('PUT', { stages, progress: raw === '' ? null : Number(raw) }));
+    await api(projectUrl(state.project, '/stages'), jsonBody('PUT', {
+      stages, progress: raw === '' ? null : Number(raw), plan_skipped: $('#se-skip').checked,
+    }));
     $('#stage-editor').close();
     toast(stages.length ? 'Этапы сохранены' : 'Этапы удалены');
     loadDetail();
@@ -1118,9 +1481,9 @@ function splitPath(p) {
 function openStageByTitle(project, title) {
   const go = () => {
     const st = state.detail && state.detail.stages.find((s) => s.title === title);
-    state.stageId = st ? st.id : null;
-    renderFeed();
+    if (st) setStepperView(st.id);
     $('#feed').scrollTo({ top: 0, behavior: 'smooth' });
+    $('#project-progress').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
   if (state.project !== project) {
     selectProject(project);
@@ -1166,12 +1529,13 @@ function taskCard(t) {
 }
 
 function renderFeed() {
-  const feed = $('#feed');
+  const list = $('#feed-list');
   const p = state.project && projectByName(state.project);
+  const head = [];
   const nodes = [];
   if (state.project) {
     const archived = p && p.archived;
-    nodes.push(el('div', { class: 'feed-head' },
+    head.push(el('div', { class: 'feed-head' },
       el('h2', {}, state.project),
       p && p.pinned && !archived && el('span', { class: 'tag pinned' }, icon('pin'), 'закреплён'),
       archived && el('span', { class: 'tag archived' }, icon('archive'), 'в архиве'),
@@ -1180,11 +1544,10 @@ function renderFeed() {
         el('button', { class: 'ghost-btn', type: 'button', onclick: () => toggleArchive(p) }, icon(archived ? 'unarchive' : 'archive'), archived ? 'Вернуть из архива' : 'В архив'),
       ),
     ));
-    if (p && p.status) nodes.push(el('div', { class: 'project-status' }, el('b', {}, 'Статус'), p.status));
-    nodes.push(progressCard(state.detail));
+    if (p && p.status) head.push(el('div', { class: 'project-status' }, el('b', {}, 'Статус'), p.status));
   } else {
     const hidden = state.projects.filter((x) => x.archived).length;
-    nodes.push(el('div', { class: 'feed-head' },
+    head.push(el('div', { class: 'feed-head' },
       el('h2', {}, 'Все проекты'),
       el('span', { class: 'sub' }, hidden ? `свежие сверху · архив (${hidden}) скрыт` : 'свежие сверху'),
     ));
@@ -1205,9 +1568,11 @@ function renderFeed() {
   }
   if (state.hasMore) nodes.push(el('button', { class: 'ghost-btn load-more', type: 'button', onclick: () => loadTasks({ append: true }) }, 'Показать ещё'));
   // сохраняем раскрытые списки файлов между перерисовками
-  const open = new Set([...feed.querySelectorAll('.task')].filter((c) => c.querySelector('details.files[open]')).map((c) => c.dataset.id));
-  feed.replaceChildren(...nodes);
-  open.forEach((id) => feed.querySelector(`.task[data-id="${id}"] details.files`)?.setAttribute('open', ''));
+  const open = new Set([...list.querySelectorAll('.task')].filter((c) => c.querySelector('details.files[open]')).map((c) => c.dataset.id));
+  $('#feed-head').replaceChildren(...head);
+  renderStepper();
+  list.replaceChildren(...nodes);
+  open.forEach((id) => list.querySelector(`.task[data-id="${id}"] details.files`)?.setAttribute('open', ''));
 }
 
 async function deleteTask(t) {
@@ -1726,6 +2091,7 @@ function connectEvents() {
   es.onopen = () => {
     live.classList.add('on');
     live.querySelector('span').textContent = 'онлайн';
+    checkServer();
     // после переподключения могли пропустить события
     if (!first) { refreshProjects(); refreshTasks(); refreshNotes(); refreshDetail(); }
     first = false;
@@ -1748,6 +2114,10 @@ function connectEvents() {
 
 // ============ старт ============
 setInterval(refreshRelativeTimes, 30000);
+let lastServerCheck = 0;
+window.addEventListener('focus', () => {
+  if (Date.now() - lastServerCheck > 30000) { lastServerCheck = Date.now(); checkServer(); }
+});
 state.project = readHash();
 state.detailLoading = !!state.project;
 loadProjects().then(() => applyProject(state.project));

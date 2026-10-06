@@ -26,8 +26,12 @@ function formatDate(iso) {
 function formatStages(info) {
   const lines = [];
   const stages = (info && info.stages) || [];
+  if (!stages.length && info && info.plan_skipped) {
+    lines.push('План этапов для этого проекта пользователь отключил — составлять его не нужно.');
+    return lines;
+  }
   if (!stages.length) {
-    lines.push('Этапы проекта в дашборде ещё не заданы.');
+    lines.push('У проекта нет плана этапов. По правилу из ~/.claude/CLAUDE.md план обязателен: его нужно составить в начале работы (PUT /api/stages), если только пользователь прямо не попросил обойтись без плана.');
     return lines;
   }
   const progress = info.progress !== null && info.progress !== undefined ? `, готовность ${info.progress}%` : '';

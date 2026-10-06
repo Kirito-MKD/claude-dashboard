@@ -83,7 +83,8 @@ test('install: без settings.json и CLAUDE.md — создаёт их', () =>
   const dir = path.join(tmpDir(), 'fresh-claude');
   assert.equal(run(dir).status, 0);
   const s = readJson(path.join(dir, 'settings.json'));
-  assert.deepEqual(Object.keys(s.hooks), ['SessionStart', 'SessionEnd']);
+  assert.deepEqual(Object.keys(s.hooks), ['SessionStart', 'SessionEnd', 'Stop']);
+  assert.deepEqual(s.hooks.Stop, [{ hooks: [{ type: 'command', command: `node "${ROOT}/hooks/stop.js"`, timeout: 10 }] }]);
   assert.ok(fs.readFileSync(path.join(dir, 'CLAUDE.md'), 'utf8').startsWith('<!-- agent-dashboard:start -->'));
 });
 

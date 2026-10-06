@@ -258,8 +258,75 @@ test('session-start.js показывает этапы, готовность и 
     assert.match(r.stdout, /○ 3\. Оплата — впереди/);
 
     const fresh = await runHook('session-start.js', { session_id: 's2', cwd: '/work/brand-new' }, { AGENT_DASHBOARD_URL: srv.base });
-    assert.match(fresh.stdout, /Этапы проекта в дашборде ещё не заданы/);
+    assert.match(fresh.stdout, /У проекта нет плана этапов\. По правилу из ~\/\.claude\/CLAUDE\.md план обязателен/);
+
+    await fetch(`${srv.base}/api/stages`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project: 'no-plan', skip: true }) });
+    const skipped = await runHook('session-start.js', { session_id: 's3', cwd: '/work/no-plan' }, { AGENT_DASHBOARD_URL: srv.base });
+    assert.match(skipped.stdout, /План этапов для этого проекта пользователь отключил/);
   } finally {
     await srv.stop();
+  }
+});
+
+// ---------- Stop: план этапов обязателен ----------
+
+test('stop.js требует план, если в сессии менялись файлы, а этапов нет', async () => {
+  const srv = await startServer();
+  const dir = tmpDir();
+  const transcript = writeTranscript(dir, FULL_TRANSCRIPT); // в транскрипте есть Edit/Write
+  const input = { session_id: 'stop-1', transcript_path: transcript, cwd: PROJECT_DIR, hook_event_name: 'Stop', stop_hook_active: false };
+  const env = { AGENT_DASHBOARD_URL: srv.base, CLAUDE_PROJECT_DIR: PROJECT_DIR };
+  try {
+    // проекта ещё нет в дашборде → напоминание
+    let r = await runHook('stop.js', input, env);
+    assert.equal(r.status, 0);
+    const out = JSON.parse(r.stdout);
+    assert.equal(out.hookSpecificOutput.hookEventName, 'Stop');
+    assert.match(out.hookSpecificOutput.additionalContext, /нет\. По правилу из ~\/\.claude\/CLAUDE\.md план обязателен|плана этапов у проекта в дашборде нет/);
+    assert.match(out.hookSpecificOutput.additionalContext, /PUT .*\/api\/stages/);
+    assert.match(out.hookSpecificOutput.additionalContext, /\{"project": "my-shop", "skip": true\}/);
+
+    // повторный стоп в том же ответе — не мешаем (защита от зацикливания)
+    r = await runHook('stop.js', { ...input, stop_hook_active: true }, env);
+    assert.equal(r.stdout, '');
+
+    // сессия без правок файлов — план не требуем
+    const qa = writeTranscript(tmpDir(), [user('Что делает этот проект?'), assistant([{ type: 'text', text: 'Это магазин.' }])]);
+    r = await runHook('stop.js', { ...input, transcript_path: qa }, env);
+    assert.equal(r.stdout, '');
+
+    // план составлен — тишина
+    await fetch(`${srv.base}/api/stages`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project: 'my-shop', stages: ['Каталог', 'Корзина'] }) });
+    r = await runHook('stop.js', input, env);
+    assert.equal(r.stdout, '');
+
+    // пользователь отказался от плана — тишина
+    await fetch(`${srv.base}/api/stages`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project: 'other-proj', skip: true }) });
+    r = await runHook('stop.js', { ...input, cwd: '/work/other-proj' }, { ...env, CLAUDE_PROJECT_DIR: '/work/other-proj' });
+    assert.equal(r.stdout, '');
+  } finally {
+    await srv.stop();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('stop.js молчит, если сервер не запущен или это старая версия без API этапов', async () => {
+  const dir = tmpDir();
+  const transcript = writeTranscript(dir, FULL_TRANSCRIPT);
+  const input = { session_id: 's', transcript_path: transcript, cwd: PROJECT_DIR, stop_hook_active: false };
+  let r = await runHook('stop.js', input, { AGENT_DASHBOARD_URL: 'http://127.0.0.1:9' });
+  assert.equal(r.status, 0);
+  assert.equal(r.stdout, '');
+
+  // имитация сервера 1.0: на любой неизвестный адрес — 404 «Нет такого API»
+  const http = require('http');
+  const old = http.createServer((req, res) => { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end('{"error":"Нет такого API"}'); });
+  await new Promise((res) => old.listen(0, '127.0.0.1', res));
+  try {
+    r = await runHook('stop.js', input, { AGENT_DASHBOARD_URL: `http://127.0.0.1:${old.address().port}` });
+    assert.equal(r.stdout, '');
+  } finally {
+    old.close();
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });

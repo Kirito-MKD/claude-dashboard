@@ -2,7 +2,7 @@
 'use strict';
 /**
  * Подключает дашборд к Claude Code:
- *   1. добавляет хуки SessionStart/SessionEnd в ~/.claude/settings.json (остальные настройки не трогает);
+ *   1. добавляет хуки SessionStart/SessionEnd/Stop в ~/.claude/settings.json (остальные настройки не трогает);
  *   2. добавляет в ~/.claude/CLAUDE.md инструкцию отчитываться в дашборд.
  * Повторный запуск ничего не дублирует. Перед изменением файлов делается резервная копия.
  *
@@ -20,6 +20,8 @@ const HOOK_EVENTS = {
   SessionStart: { script: 'session-start.js', timeout: 10 },
   // таймаут поднимает общий бюджет SessionEnd с 1.5 с; сам хук отвечает мгновенно
   SessionEnd: { script: 'session-end.js', timeout: 5 },
+  // напоминает составить план этапов, если его нет (см. hooks/stop.js)
+  Stop: { script: 'stop.js', timeout: 10 },
 };
 const MD_START = '<!-- agent-dashboard:start -->';
 const MD_END = '<!-- agent-dashboard:end -->';
@@ -33,7 +35,8 @@ const CLAUDE_MD_BLOCK = `${MD_START}
 - \`project\` — имя корневой папки проекта (оно же указано в контексте дашборда в начале сессии), \`session_id\` — из того же контекста, если он есть.
 - \`task\` — исходный запрос пользователя в 1–2 фразах; \`summary\` — что сделано, кратко (можно Markdown); \`files\` — изменённые файлы; \`status\` — состояние проекта одной строкой (что готово / что дальше).
 - \`stage\` — точное название этапа проекта, к которому относится задача (этапы перечислены в контексте дашборда); \`progress\` — общая готовность проекта в процентах, 0–100.
-- Если у проекта ещё нет этапов — составь план из 3–7 этапов и отправь его PUT-запросом ниже. Когда этап завершён или план изменился — отправь PUT снова с полным списком и статусами (\`todo\` / \`active\` / \`done\`); описания уже существующих этапов можно не повторять.
+- **План этапов обязателен для каждого проекта.** Если в контексте дашборда этапов нет — в начале работы составь план из 3–7 этапов всего проекта (с описанием задач каждого этапа) и отправь его PUT-запросом ниже. Исключение одно: пользователь прямо попросил план не составлять — тогда отправь \`{"project": "…", "skip": true}\` на тот же адрес.
+- Когда этап завершён или план изменился — отправь PUT снова с полным списком и статусами (\`todo\` / \`active\` / \`done\`); описания уже существующих этапов можно не повторять. Необязательное поле \`icon\` этапа: lightbulb, layout, code, database, flask, cart, card, wrench, cpu, shield, rocket, file, package, upload, zap, flag, user, settings, search.
 - Если сервер не отвечает — не повторяй запрос и не останавливайся из-за этого.
 
 \`\`\`bash
@@ -47,7 +50,7 @@ JSON
 \`\`\`bash
 curl -s -m 3 -X PUT http://localhost:${PORT}/api/stages -H 'Content-Type: application/json' --data-binary @- <<'JSON' || true
 {"project": "my-app", "stages": [
-  {"title": "Прототип", "description": "Каркас приложения, роутинг, макеты экранов", "status": "done"},
+  {"title": "Прототип", "description": "Каркас приложения, роутинг, макеты экранов", "status": "done", "icon": "layout"},
   {"title": "Экспорт и отчёты", "description": "CSV, PDF, фильтры по датам", "status": "active"},
   {"title": "Авторизация", "description": "Вход, роли, восстановление пароля", "status": "todo"}
 ]}
@@ -198,7 +201,7 @@ function main() {
   } else {
     const content = JSON.stringify(nextSettings, null, 2) + '\n';
     const backup = writeWithBackup(settingsFile, content, raw, args.dryRun);
-    console.log(`✓ ${verb}${settingsFile}: ${args.uninstall ? 'хуки дашборда удалены' : 'добавлены хуки SessionStart и SessionEnd'}`);
+    console.log(`✓ ${verb}${settingsFile}: ${args.uninstall ? 'хуки дашборда удалены' : `хуки дашборда настроены (${Object.keys(HOOK_EVENTS).join(', ')})`}`);
     if (backup) console.log(`  резервная копия: ${backup}`);
     if (args.dryRun) console.log(content);
   }
@@ -222,6 +225,21 @@ function main() {
   }
 }
 
+// После обновления кода частая ошибка — оставить работать старый процесс сервера
+async function warnIfServerOutdated() {
+  const { API_LEVEL } = require('../server');
+  let h = null;
+  try {
+    const res = await fetch(`http://127.0.0.1:${PORT}/api/health`, { signal: AbortSignal.timeout(1000) });
+    h = res.ok ? await res.json() : null;
+  } catch { return; }
+  if (!h) return;
+  if (!h.api || h.api < API_LEVEL || h.stale) {
+    console.log(`\n⚠ Запущен сервер старой версии (${h.version || '1.0'}) — новые функции не заработают, пока его не перезапустить:`);
+    console.log('  npm run restart');
+  }
+}
+
 if (require.main === module) {
   try {
     main();
@@ -229,6 +247,7 @@ if (require.main === module) {
     console.error('✗ ' + e.message);
     process.exit(1);
   }
+  if (!process.argv.includes('--uninstall') && !process.argv.includes('--dry-run')) warnIfServerOutdated();
 }
 
 module.exports = { withOurHooks, withoutOurHooks, withBlock, stripBlock, hookCommand, CLAUDE_MD_BLOCK };

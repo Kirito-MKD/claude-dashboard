@@ -64,6 +64,12 @@ const MIGRATIONS = [
       CREATE INDEX IF NOT EXISTS idx_tasks_stage ON tasks(project, stage);
     `);
   },
+  // 2: иконка этапа и отказ от обязательного плана для проекта
+  (db) => {
+    const cols = (table) => db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+    if (!cols('stages').includes('icon')) db.exec('ALTER TABLE stages ADD COLUMN icon TEXT');
+    if (!cols('projects').includes('plan_skipped')) db.exec('ALTER TABLE projects ADD COLUMN plan_skipped INTEGER NOT NULL DEFAULT 0');
+  },
 ];
 
 const STAGE_STATUSES = new Set(['todo', 'active', 'done']);
@@ -130,10 +136,10 @@ function openDb(dataDir) {
 
     stages: db.prepare('SELECT * FROM stages WHERE project = ? ORDER BY position, id'),
     getStage: db.prepare('SELECT * FROM stages WHERE id = ? AND project = ?'),
-    insertStage: db.prepare(`INSERT INTO stages (project, position, title, description, status, completed_at)
-                             VALUES (@project, @position, @title, @description, @status,
+    insertStage: db.prepare(`INSERT INTO stages (project, position, title, description, status, icon, completed_at)
+                             VALUES (@project, @position, @title, @description, @status, @icon,
                                      CASE WHEN @status = 'done' THEN ${NOW} END)`),
-    updateStage: db.prepare(`UPDATE stages SET position = @position, title = @title, description = @description,
+    updateStage: db.prepare(`UPDATE stages SET position = @position, title = @title, description = @description, icon = @icon,
                                completed_at = CASE WHEN @status = 'done' THEN COALESCE(completed_at, ${NOW}) END,
                                status = @status
                              WHERE id = @id`),
@@ -156,6 +162,7 @@ function openDb(dataDir) {
                  COALESCE((SELECT MAX(o.created_at) FROM notes o WHERE o.project = n.project), '')) AS last_activity,
              COALESCE(p.pinned, 0) AS pinned,
              COALESCE(p.archived, 0) AS archived,
+             COALESCE(p.plan_skipped, 0) AS plan_skipped,
              p.progress AS reported_progress,
              (SELECT COUNT(*) FROM stages s WHERE s.project = n.project) AS stages_total,
              (SELECT COUNT(*) FROM stages s WHERE s.project = n.project AND s.status = 'done') AS stages_done,
@@ -175,6 +182,7 @@ function openDb(dataDir) {
       ...rest,
       pinned: !!row.pinned,
       archived: !!row.archived,
+      plan_skipped: !!row.plan_skipped,
       progress: effectiveProgress(reported_progress, row.stages_total, row.stages_done, stages_active),
       reported_progress,
     };
@@ -191,13 +199,13 @@ function openDb(dataDir) {
     const found = stages.find((s) => sameTitle(s.title, title));
     if (found) {
       if (found.status === 'todo') {
-        const { id, position, title: t, description } = found;
-        q.updateStage.run({ id, position, title: t, description, status: 'active' });
+        const { id, position, title: t, description, icon } = found;
+        q.updateStage.run({ id, position, title: t, description, icon, status: 'active' });
       }
       return found.title;
     }
     const position = stages.length ? Math.max(...stages.map((s) => s.position)) + 1 : 0;
-    q.insertStage.run({ project, position, title: title.trim(), description: '', status: 'active' });
+    q.insertStage.run({ project, position, title: title.trim(), description: '', status: 'active', icon: null });
     return title.trim();
   }
 
@@ -247,11 +255,14 @@ function openDb(dataDir) {
           position,
           title: item.title,
           description: item.description !== undefined ? item.description : prev.description,
+          icon: item.icon !== undefined ? item.icon : prev.icon,
           status: item.status || prev.status,
         });
         if (prev.title !== item.title) q.renameStageTasks.run(item.title, project, prev.title);
       } else {
-        q.insertStage.run({ project, position, title: item.title, description: item.description || '', status: item.status || 'todo' });
+        q.insertStage.run({
+          project, position, title: item.title, description: item.description || '', status: item.status || 'todo', icon: item.icon || null,
+        });
       }
     });
     for (const s of existing) if (!kept.has(s.id)) q.deleteStage.run(s.id);
@@ -266,6 +277,7 @@ function openDb(dataDir) {
       position: prev.position,
       title,
       description: patch.description !== undefined ? patch.description : prev.description,
+      icon: patch.icon !== undefined ? patch.icon : prev.icon,
       status: patch.status || prev.status,
     });
     if (title !== prev.title) q.renameStageTasks.run(title, project, prev.title);
@@ -320,6 +332,7 @@ function openDb(dataDir) {
         args.archived = patch.archived ? 1 : 0;
       }
       if (patch.progress !== undefined) { sets.push('progress = @progress'); args.progress = patch.progress; }
+      if (patch.plan_skipped !== undefined) { sets.push('plan_skipped = @plan_skipped'); args.plan_skipped = patch.plan_skipped ? 1 : 0; }
       if (sets.length) db.prepare(`UPDATE projects SET ${sets.join(', ')} WHERE name = @name`).run(args);
     },
 

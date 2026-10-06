@@ -324,3 +324,64 @@ test('health сообщает pid и версию (нужно для перез�
   assert.equal(r.body.app, 'agent-dashboard');
   assert.equal(r.body.pid, process.pid);
 });
+
+// ---------- план: отказ, иконки; версия и перезапуск сервера ----------
+
+test('отказ от плана: PUT {skip:true}, новый план снимает отказ, PATCH plan_skipped', async () => {
+  const skip = await call('/api/stages', json('PUT', { project: 'skip-proj', skip: true }));
+  assert.equal(skip.status, 200, JSON.stringify(skip.body));
+  assert.equal(skip.body.plan_skipped, true);
+  assert.equal(skip.body.stages.length, 0);
+  const planned = await call('/api/stages', json('PUT', { project: 'skip-proj', stages: ['Первый'] }));
+  assert.equal(planned.body.plan_skipped, false, 'план составлен — отказ больше не действует');
+  const again = await patchProject('skip-proj', { plan_skipped: true });
+  assert.equal(again.body.plan_skipped, true);
+  const editor = await call('/api/stages', json('PUT', { project: 'skip-proj', stages: ['Первый'], plan_skipped: true }));
+  assert.equal(editor.body.plan_skipped, true, 'редактор может сохранить этапы и оставить отказ');
+});
+
+test('иконка этапа сохраняется, сбрасывается пустой строкой и валидируется', async () => {
+  const r = await call('/api/stages', json('PUT', { project: 'icons', stages: [{ title: 'Релиз', icon: 'rocket' }, { title: 'Тесты' }] }));
+  assert.deepEqual(r.body.stages.map((s) => s.icon), ['rocket', null]);
+  const kept = await call('/api/stages', json('PUT', { project: 'icons', stages: [{ title: 'Релиз' }, { title: 'Тесты', icon: 'flask' }] }));
+  assert.deepEqual(kept.body.stages.map((s) => s.icon), ['rocket', 'flask'], 'без icon — прежняя иконка');
+  const id = kept.body.stages[0].id;
+  const reset = await call(`/api/projects/icons/stages/${id}`, json('PATCH', { icon: '' }));
+  assert.equal(reset.body.icon, null);
+  assert.equal((await call('/api/stages', json('PUT', { project: 'icons', stages: [{ title: 'X', icon: '<svg>' }] }))).status, 400);
+});
+
+test('health: уровень API, признак устаревшего процесса; интерфейс ждёт тот же уровень API', async () => {
+  const { API_LEVEL } = require('../server');
+  const h = (await call('/api/health')).body;
+  assert.equal(h.api, API_LEVEL);
+  assert.equal(h.stale, false);
+  assert.equal(h.can_restart, false, 'в тестах перезапуск не подключён');
+  assert.equal((await call('/api/restart', { method: 'POST' })).status, 501);
+  const html = fs.readFileSync(require('path').join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  assert.match(html, new RegExp(`const UI_API_LEVEL = ${API_LEVEL};`));
+});
+
+test('POST /api/restart отвечает и вызывает перезапуск после ответа', async () => {
+  const { createApp } = require('../server');
+  const { tmpDir } = require('./helpers');
+  let called = 0;
+  const dir = tmpDir();
+  const ctx = createApp({ dataDir: dir, onRestart: () => { called++; } });
+  const server = await new Promise((resolve) => { const s = ctx.app.listen(0, '127.0.0.1', () => resolve(s)); });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    assert.equal((await (await fetch(base + '/api/health')).json()).can_restart, true);
+    const r = await fetch(base + '/api/restart', { method: 'POST' });
+    assert.equal(r.status, 200);
+    await new Promise((res) => setTimeout(res, 150));
+    assert.equal(called, 1);
+    const evil = await fetch(base + '/api/restart', { method: 'POST', headers: { Origin: 'https://evil.example' } });
+    assert.equal(evil.status, 403, 'чужой сайт не может перезапустить сервер');
+  } finally {
+    ctx.close();
+    server.closeAllConnections();
+    await new Promise((res) => server.close(res));
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

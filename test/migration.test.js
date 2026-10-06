@@ -38,7 +38,8 @@ test('миграция базы первой версии: данные на м�
   assert.equal(project.pinned, false);
   assert.equal(project.archived, false);
   assert.equal(project.progress, null);
-  assert.equal(db.raw.pragma('user_version', { simple: true }), 1);
+  assert.equal(db.raw.pragma('user_version', { simple: true }), 2);
+  assert.equal(project.plan_skipped, false);
   db.close();
 
   db = openDb(dir);

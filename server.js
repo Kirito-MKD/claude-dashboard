@@ -2,10 +2,23 @@
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const { spawn } = require('child_process');
 const express = require('express');
 const multer = require('multer');
 const { openDb, STAGE_STATUSES } = require('./db');
 const { version: VERSION } = require('./package.json');
+
+// Версия набора эндпоинтов: интерфейс сверяет её с /api/health и предупреждает,
+// если запущен устаревший сервер (например, после git pull без перезапуска).
+const API_LEVEL = 3;
+
+function diskVersion() {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version;
+  } catch {
+    return VERSION;
+  }
+}
 
 const DEFAULT_PORT = 4000;
 const LOCAL_HOSTS = ['localhost', '127.0.0.1', '::1', '[::1]'];
@@ -84,6 +97,15 @@ function parseStageStatus(value) {
   return status;
 }
 
+// Иконка этапа — короткое имя из набора интерфейса; пустая строка сбрасывает на автоподбор
+function parseIcon(value) {
+  if (value === undefined) return undefined;
+  const icon = str(value, 30).trim().toLowerCase();
+  if (!icon) return null;
+  if (!/^[a-z][a-z0-9-]*$/.test(icon)) throw new HttpError(400, 'icon — короткое имя иконки латиницей, например "rocket"');
+  return icon;
+}
+
 // План этапов: массив или { stages: [...] }; элемент — строка-название или объект
 function parseStages(body) {
   const list = Array.isArray(body) ? body : body && Array.isArray(body.stages) ? body.stages : null;
@@ -103,6 +125,7 @@ function parseStages(body) {
       title,
       description: item.description !== undefined ? str(item.description, 4000).trim() : undefined,
       status: parseStageStatus(item.status),
+      icon: parseIcon(item.icon),
     };
   });
 }
@@ -212,7 +235,26 @@ function createApp(options = {}) {
   const noteUpload = upload.fields([{ name: 'audio', maxCount: 1 }, { name: 'images', maxCount: 30 }]);
 
   // ---------- API ----------
-  app.get('/api/health', (req, res) => res.json({ ok: true, app: 'agent-dashboard', version: VERSION, pid: process.pid }));
+  app.get('/api/health', (req, res) => {
+    const onDisk = diskVersion();
+    res.json({
+      ok: true,
+      app: 'agent-dashboard',
+      version: VERSION,
+      api: API_LEVEL,
+      pid: process.pid,
+      // код на диске обновили (git pull), а процесс работает со старым
+      stale: onDisk !== VERSION,
+      disk_version: onDisk,
+      can_restart: typeof options.onRestart === 'function',
+    });
+  });
+
+  app.post('/api/restart', (req, res) => {
+    if (typeof options.onRestart !== 'function') throw new HttpError(501, 'Перезапуск недоступен');
+    res.json({ ok: true, restarting: true, pid: process.pid });
+    res.on('finish', () => setTimeout(options.onRestart, 50));
+  });
 
   app.post('/api/tasks', (req, res) => {
     const b = req.body && typeof req.body === 'object' ? req.body : {};
@@ -263,9 +305,10 @@ function createApp(options = {}) {
     const patch = {};
     if (b.pinned !== undefined) patch.pinned = !!b.pinned;
     if (b.archived !== undefined) patch.archived = !!b.archived;
+    if (b.plan_skipped !== undefined) patch.plan_skipped = !!b.plan_skipped;
     const progress = parseProgress(b.progress, { allowNull: true });
     if (progress !== undefined) patch.progress = progress;
-    if (!Object.keys(patch).length) throw new HttpError(400, 'Нечего менять: передайте pinned, archived или progress');
+    if (!Object.keys(patch).length) throw new HttpError(400, 'Нечего менять: передайте pinned, archived, plan_skipped или progress');
     if (!db.getProject(name, { withTasks: false })) throw new HttpError(404, 'Проект не найден');
     db.updateProject(name, patch);
     broadcast('project', name);
@@ -273,10 +316,20 @@ function createApp(options = {}) {
   });
 
   function putStages(name, body, res) {
-    const stages = parseStages(body);
-    db.replaceStages(name, stages);
-    const progress = parseProgress(body && body.progress, { allowNull: true });
-    if (progress !== undefined) db.updateProject(name, { progress });
+    const b = body && typeof body === 'object' ? body : {};
+    // {"project": "...", "skip": true} — пользователь попросил обойтись без плана
+    const skipOnly = (b.skip === true || b.plan_skipped === true) && b.stages === undefined;
+    const patch = {};
+    if (!skipOnly) {
+      const stages = parseStages(b);
+      db.replaceStages(name, stages);
+      if (stages.length) patch.plan_skipped = false;
+    }
+    if (b.skip !== undefined) patch.plan_skipped = !!b.skip;
+    if (b.plan_skipped !== undefined) patch.plan_skipped = !!b.plan_skipped;
+    const progress = parseProgress(b.progress, { allowNull: true });
+    if (progress !== undefined) patch.progress = progress;
+    db.updateProject(name, patch);
     broadcast('project', name);
     res.json(db.getProject(name));
   }
@@ -296,9 +349,11 @@ function createApp(options = {}) {
       if (clash) throw new HttpError(400, `Этап «${patch.title}» уже есть`);
     }
     if (b.description !== undefined) patch.description = str(b.description, 4000).trim();
+    const icon = parseIcon(b.icon);
+    if (icon !== undefined) patch.icon = icon;
     const status = parseStageStatus(b.status);
     if (status) patch.status = status;
-    if (!Object.keys(patch).length) throw new HttpError(400, 'Нечего менять: передайте status, title или description');
+    if (!Object.keys(patch).length) throw new HttpError(400, 'Нечего менять: передайте status, title, description или icon');
     const stage = db.updateStage(name, parseId(req.params.id), patch);
     if (!stage) throw new HttpError(404, 'Этап не найден');
     broadcast('project', name);
@@ -401,19 +456,54 @@ function createApp(options = {}) {
   return { app, db, close, port, dataDir, uploadDir };
 }
 
-if (require.main === module) {
-  const host = process.env.HOST || '127.0.0.1';
-  const { app, port, dataDir } = createApp();
-  const server = app.listen(port, host, () => {
-    console.log(`Agent dashboard: http://localhost:${port}  (данные: ${dataDir})`);
-  });
-  server.on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-      console.error(`Порт ${port} занят — дашборд уже запущен? Проверьте http://localhost:${port}`);
-      process.exit(1);
-    }
-    throw err;
-  });
+// Под launchd/systemd (их настраивает npm run autostart) перезапуском занимается менеджер:
+// достаточно завершиться с ошибкой. Иначе (Windows, ручной запуск) запускаем замену сами.
+function isSupervised() {
+  return process.env.AGENT_DASHBOARD_SUPERVISED === '1'
+    || String(process.env.XPC_SERVICE_NAME || '').includes('agent-dashboard');
 }
 
-module.exports = { createApp, normalizeFiles };
+function main() {
+  const host = process.env.HOST || '127.0.0.1';
+  let server;
+  let ctx;
+  const restart = () => {
+    console.log('Перезапуск по запросу из интерфейса…');
+    if (!isSupervised()) {
+      const out = fs.openSync(path.join(ctx.dataDir, 'server.log'), 'a');
+      spawn(process.execPath, [__filename], {
+        cwd: __dirname,
+        detached: true,
+        windowsHide: true,
+        stdio: ['ignore', out, out],
+        env: { ...process.env, AGENT_DASHBOARD_RESTARTING: '1' },
+      }).unref();
+    }
+    server.close();
+    server.closeAllConnections();
+    ctx.close();
+    process.exit(isSupervised() ? 1 : 0);
+  };
+  ctx = createApp({ onRestart: restart });
+  const { app, port, dataDir } = ctx;
+  // новый процесс после перезапуска ждёт, пока старый освободит порт
+  const deadline = Date.now() + (process.env.AGENT_DASHBOARD_RESTARTING === '1' ? 15000 : 0);
+  const listen = () => {
+    server = app.listen(port, host, () => {
+      console.log(`Agent dashboard ${VERSION}: http://localhost:${port}  (данные: ${dataDir})`);
+    });
+    server.on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        if (Date.now() < deadline) return setTimeout(listen, 250);
+        console.error(`Порт ${port} занят — дашборд уже запущен? Проверьте http://localhost:${port}`);
+        process.exit(1);
+      }
+      throw err;
+    });
+  };
+  listen();
+}
+
+if (require.main === module) main();
+
+module.exports = { createApp, normalizeFiles, API_LEVEL };

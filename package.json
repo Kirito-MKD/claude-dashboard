@@ -1,6 +1,6 @@
 {
   "name": "agent-dashboard",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Локальный дашборд для отслеживания работы Claude Code агентов по проектам",
   "private": true,
   "main": "server.js",
